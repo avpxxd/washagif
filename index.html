@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WashaGif Pro 9000 - Front-Load GIF Washing Machine</title>
+  <meta name="description" content="Wash your crusty GIFs and memes in a realistic front-load washing machine through all authentic cycles for 5 full minutes!">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css?v=17">
+</head>
+<body>
+  <div class="laundromat-background">
+    <div class="tile-grid-overlay"></div>
+    <div class="ambient-glow"></div>
+  </div>
+
+  <header class="app-header">
+    <div class="logo-group">
+      <h1 class="brand-title">WashaGif <span class="badge-pro">PRO 9000</span></h1>
+    </div>
+    <div class="header-actions">
+      <button id="btn-mute" class="btn-pill" title="Toggle Sound">
+        <span class="icon">🔊</span> SOUND ON
+      </button>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- THE WASHING MACHINE APPLIANCE -->
+    <section class="machine-stage">
+      <div id="washer-chassis" class="washer-chassis" title="Drag & drop any GIF or image here!">
+        <!-- TOP CONTROL PANEL / FASCIA (Timer on Left, Stages Vertical Stack, Progress Bar + Start) -->
+        <div class="fascia-panel">
+          <div class="fascia-display-row">
+            <div class="timer-column">
+              <div id="timer-display" class="digital-timer">05:00</div>
+              <span class="timer-sublabel">REMAINING</span>
+            </div>
+            <div class="stages-vertical-stack">
+              <div class="stage-item" id="stage-sense"><span class="stage-led"></span> SENSE</div>
+              <div class="stage-item" id="stage-fill"><span class="stage-led"></span> FILL</div>
+              <div class="stage-item" id="stage-wash"><span class="stage-led"></span> WASH</div>
+              <div class="stage-item" id="stage-rinse"><span class="stage-led"></span> RINSE</div>
+              <div class="stage-item" id="stage-spin"><span class="stage-led"></span> SPIN</div>
+              <div class="stage-item" id="stage-done"><span class="stage-led"></span> DONE</div>
+            </div>
+          </div>
+          <div class="fascia-controls-row">
+            <div class="progress-track">
+              <div id="cycle-progress-bar" class="progress-fill"></div>
+            </div>
+            <button id="btn-start-pause" class="btn-fascia-start" title="Start or Pause Wash">
+              <span class="icon">▶</span> START
+            </button>
+          </div>
+        </div>
+
+        <!-- MAIN MACHINE DRUM HOUSING & PORTHOLE DOOR -->
+        <div class="drum-housing">
+          <!-- The Circular Outer Bezel -->
+          <div class="porthole-outer-frame">
+            <!-- The Perforated Rotating Inner Drum Behind Door -->
+            <div class="drum-chamber">
+              <div id="inner-drum" class="stainless-drum">
+                <!-- 3 Baffles / Lifter Fins -->
+                <div class="drum-baffle baffle-1"></div>
+                <div class="drum-baffle baffle-2"></div>
+                <div class="drum-baffle baffle-3"></div>
+                <!-- Perforated Steel Texture Overlay -->
+                <div class="perforated-texture"></div>
+              </div>
+
+              <!-- Media Washing Container (User's GIF / Image inside drum) -->
+              <div id="media-chamber" class="media-chamber">
+                <div id="washing-gif-wrapper" class="washing-gif-wrapper">
+                  <img id="washing-gif" class="washing-gif" src="assets/sample-cat.gif" alt="Washing GIF" />
+                  <!-- Procedural Grime & Dirt Overlay that washes off -->
+                  <div id="gif-grime-overlay" class="gif-grime-overlay">
+                    <div class="dirt-stain stain-1"></div>
+                    <div class="dirt-stain stain-2"></div>
+                    <div class="dirt-stain stain-3"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Dynamic Water, Foam, and Suds Canvas -->
+              <canvas id="water-canvas" class="water-canvas"></canvas>
+
+              <!-- Dropzone inside drum: exposed when door is opened -->
+              <div id="drum-dropzone" class="drum-dropzone visible" title="Click or Drag & Drop GIF here">
+                <div class="dropzone-content">
+                  <span class="drop-icon">📥</span>
+                  <span class="drop-title">DRUM IS OPEN</span>
+                  <span class="drop-desc">Insert a GIF to wash<br>or <u>Click to Browse</u></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- The Front Load Glass Door (Opens and Closes in 3D) -->
+            <div id="washer-door" class="washer-door door-open">
+              <div class="door-glass" title="Click door to open / close">
+                <div class="glass-reflection-specular"></div>
+                <div class="glass-tint"></div>
+              </div>
+              <div class="door-chrome-rim"></div>
+              <div id="door-handle" class="door-handle" title="Pull Door Handle to Open/Close">
+                <div class="door-latch-pin"></div>
+              </div>
+
+              <!-- Message on Washer Door: Washer is done, open door -->
+              <div id="door-open-prompt" class="door-open-prompt" title="Click to Open Door">
+                <div class="door-prompt-card">
+                  <span class="prompt-sparkle">✨</span>
+                  <span class="prompt-text">WASHER IS DONE!</span>
+                  <span class="prompt-action">👉 OPEN DOOR 👈</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hidden file input for uploading GIFs -->
+      <input type="file" id="file-input" accept="image/*" style="display: none;" />
+
+      <!-- LAUNDROMAT LIVE TICKER (Kept per request) -->
+      <div class="ticker-card machine-ticker">
+        <h3 class="ticker-title">🌀 LAUNDROMAT LIVE TICKER</h3>
+        <div id="trivia-ticker" class="trivia-ticker">
+          💡 Tip: Never wash a rare Pepe in water above 40°C to preserve pixel borders.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- COMPLETION MODAL -->
+  <div id="completion-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-sparkles">✨ ✨ ✨</div>
+      <h2 class="modal-title">CYCLE COMPLETE!</h2>
+      <p class="modal-subtitle">Your GIF is 100% sanitized, squeaky clean, and dried!</p>
+
+      <div class="result-preview-box">
+        <img id="clean-result-img" class="clean-result-img" src="assets/sample-cat.gif" alt="Clean Result" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-download-washed" class="btn-modal btn-download">
+          <span class="icon">⬇️</span> Download Washed GIF / Image
+        </button>
+        <button id="btn-wash-again" class="btn-modal btn-secondary">
+          <span class="icon">🧺</span> Wash Another GIF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast-notification" class="toast"></div>
+
+  <!-- SCRIPTS -->
+  <script src="js/audio.js?v=17"></script>
+  <script src="js/water-canvas.js?v=17"></script>
+  <script src="js/gif-physics.js?v=17"></script>
+  <script src="js/washer.js?v=17"></script>
+  <script src="js/app.js?v=17"></script>
+</body>
+</html>
