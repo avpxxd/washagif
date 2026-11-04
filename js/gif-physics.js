@@ -1,56 +1,25 @@
 // Authentic Clothes Tumbling & Drop Physics with Triangular Wedge Baffles
-// Features:
-// - Triangular baffle collisions (angled ramps on both sides) so GIFs slide off smoothly and never get stuck
-// - Lifter scoops clothes up the drum wall
-// - Clothes naturally slide up and over the triangular apex, plummeting back to the bottom
-// - Soft cloth landing (low restitution, no pinball bouncing)
-// - Rolls and settles at the bottom until the next scoop or drum reversal
-// - Pins to the outer drum wall ONLY during high-speed spin cycle (1400 RPM)
+// Multi-item support (up to 5 clothes/GIFs) + Dynamic mobile-responsive drum sizing
 
 class GifPhysics {
   constructor(washer) {
     this.washer = washer;
-    this.drumRadius = 168; // px
-    this.gifRadius = 42;   // px
-    this.maxRadius = this.drumRadius - this.gifRadius; // ~126px
-
-    // Position & Velocity (drum center is 0, 0; bottom is +126px)
-    this.x = 0;
-    this.y = 100;
-    this.vx = 0;
-    this.vy = 0;
-    this.angle = 0;
-    this.angularVelocity = 0;
+    this.drumRadius = 174; // px (dynamically updated from DOM)
+    this.gifRadius = 56;   // px (dynamically scaled)
+    this.maxRadius = 118;  // px
 
     // Physical Constants tuned for REALISTIC CLOTHES / LAUNDRY TUMBLING
     this.mass = 1.0;
-    this.gravity = 2400;      // px/s^2 (strong, clean downward gravity)
+    this.gravity = 2400;      // px/s^2 (strong downward gravity)
     this.restitution = 0.16;  // Low bounciness! Heavy, soft wet cloth flop on landing
     this.baffleRestitution = 0.12;
     this.wallFriction = 0.32; // Fabric friction on stainless drum
     this.rotationalInertia = 0.5 * this.mass * (this.gifRadius * this.gifRadius);
 
-    // Mouse / Touch Dragging
-    this.isDragging = false;
-    this.dragOffsetX = 0;
-    this.dragOffsetY = 0;
-    this.dragHistory = [];
+    // Bodies array (1 to 5 laundry items)
+    this.bodies = [];
 
-    // Squash & Stretch for soft cloth deformation
-    this.squashX = 1;
-    this.squashY = 1;
-
-    // Sound cooldown
-    this.lastThudTime = 0;
-
-    // Centrifugal Spin-Lock state
-    this.isCentrifugalPinned = false;
-    this.pinnedDrumOffset = 0;
-
-    this.initMouseEvents();
-  }
-
-  reset() {
+    // Legacy singular properties for backwards compatibility
     this.x = 0;
     this.y = 95;
     this.vx = 0;
@@ -59,12 +28,115 @@ class GifPhysics {
     this.angularVelocity = 0;
     this.squashX = 1;
     this.squashY = 1;
-    this.isCentrifugalPinned = false;
-    this.pinnedDrumOffset = 0;
+
+    // Mouse / Touch Dragging
+    this.isDragging = false;
+    this.draggedBody = null;
+    this.dragOffsetX = 0;
+    this.dragOffsetY = 0;
+    this.dragHistory = [];
+
+    // Sound cooldown
+    this.lastThudTime = 0;
+
+    this.initMouseEvents();
+    this.reset();
+  }
+
+  updateDrumDimensions(forcedCount = null) {
+    const chamber = document.querySelector('.drum-chamber');
+    if (chamber) {
+      const rect = chamber.getBoundingClientRect();
+      if (rect.width > 0) {
+        this.drumRadius = rect.width / 2;
+        const count = (forcedCount !== null) ? forcedCount : Math.max(1, this.bodies.length);
+        this.gifRadius = (count > 1) 
+          ? Math.max(26, Math.round(this.drumRadius * 0.24))
+          : Math.max(38, Math.round(this.drumRadius * 0.32));
+        this.maxRadius = Math.max(30, this.drumRadius - this.gifRadius);
+        this.rotationalInertia = 0.5 * this.mass * (this.gifRadius * this.gifRadius);
+
+        for (const b of this.bodies) {
+          b.radius = this.gifRadius;
+        }
+      }
+    }
+  }
+
+  setBodies(elements) {
+    this.bodies = [];
+    if (!elements || elements.length === 0) {
+      this.syncLegacyProps();
+      return;
+    }
+    const count = elements.length;
+    this.updateDrumDimensions(count);
+
+    elements.forEach((el, i) => {
+      const staggerX = (i - (count - 1) / 2) * (this.gifRadius * 1.1);
+      const staggerY = 70 + (i % 2) * 16;
+      this.bodies.push({
+        id: i,
+        el: el,
+        x: staggerX,
+        y: staggerY,
+        vx: (Math.random() - 0.5) * 30,
+        vy: 0,
+        angle: (i * 0.35),
+        angularVelocity: 0,
+        squashX: 1,
+        squashY: 1,
+        isCentrifugalPinned: false,
+        pinnedDrumOffset: (i / count) * Math.PI * 2, // Evenly spaced during 1400 RPM spin!
+        floatPhase: i * 1.57,
+        radius: this.gifRadius,
+        mass: 1.0,
+      });
+    });
+
+    this.syncLegacyProps();
+  }
+
+  reset() {
+    if (!this.bodies || this.bodies.length === 0) {
+      this.bodies = [];
+      this.syncLegacyProps();
+      return;
+    }
+    const count = this.bodies.length;
+    this.bodies.forEach((b, i) => {
+      b.x = (i - (count - 1) / 2) * (this.gifRadius * 1.1);
+      b.y = 70 + (i % 2) * 16;
+      b.vx = 0;
+      b.vy = 0;
+      b.angle = (i * 0.35);
+      b.angularVelocity = 0;
+      b.squashX = 1;
+      b.squashY = 1;
+      b.isCentrifugalPinned = false;
+      b.pinnedDrumOffset = (i / count) * Math.PI * 2;
+    });
+    this.isDragging = false;
+    this.draggedBody = null;
+    this.syncLegacyProps();
+  }
+
+  syncLegacyProps() {
+    const primary = this.bodies[0];
+    if (primary) {
+      this.x = primary.x;
+      this.y = primary.y;
+      this.vx = primary.vx;
+      this.vy = primary.vy;
+      this.angle = primary.angle;
+      this.angularVelocity = primary.angularVelocity;
+      this.squashX = primary.squashX;
+      this.squashY = primary.squashY;
+    }
   }
 
   initMouseEvents() {
-    const chamber = document.getElementById('drum-chamber');
+    const chamber = document.querySelector('.drum-chamber');
     if (!chamber) return;
 
     const onPointerDown = (clientX, clientY) => {
@@ -75,19 +147,30 @@ class GifPhysics {
       const pointerX = clientX - centerX;
       const pointerY = clientY - centerY;
 
-      const dist = Math.hypot(pointerX - this.x, pointerY - this.y);
-      if (dist < this.gifRadius + 30) {
+      // Find closest body to pointer
+      let closest = null;
+      let closestDist = Infinity;
+      for (const b of this.bodies) {
+        const d = Math.hypot(pointerX - b.x, pointerY - b.y);
+        if (d < closestDist) {
+          closestDist = d;
+          closest = b;
+        }
+      }
+
+      if (closest && closestDist < closest.radius + 35) {
         this.isDragging = true;
-        this.dragOffsetX = this.x - pointerX;
-        this.dragOffsetY = this.y - pointerY;
-        this.dragHistory = [{ x: this.x, y: this.y, t: performance.now() }];
-        this.vx = 0;
-        this.vy = 0;
+        this.draggedBody = closest;
+        this.dragOffsetX = closest.x - pointerX;
+        this.dragOffsetY = closest.y - pointerY;
+        this.dragHistory = [{ x: closest.x, y: closest.y, t: performance.now() }];
+        closest.vx = 0;
+        closest.vy = 0;
       }
     };
 
     const onPointerMove = (clientX, clientY) => {
-      if (!this.isDragging) return;
+      if (!this.isDragging || !this.draggedBody) return;
       const rect = chamber.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
@@ -101,11 +184,11 @@ class GifPhysics {
         targetY = (targetY / dist) * this.maxRadius;
       }
 
-      this.x = targetX;
-      this.y = targetY;
+      this.draggedBody.x = targetX;
+      this.draggedBody.y = targetY;
 
       const now = performance.now();
-      this.dragHistory.push({ x: this.x, y: this.y, t: now });
+      this.dragHistory.push({ x: targetX, y: targetY, t: now });
       if (this.dragHistory.length > 5) this.dragHistory.shift();
     };
 
@@ -113,16 +196,17 @@ class GifPhysics {
       if (!this.isDragging) return;
       this.isDragging = false;
 
-      if (this.dragHistory.length >= 2) {
+      if (this.draggedBody && this.dragHistory.length >= 2) {
         const first = this.dragHistory[0];
         const last = this.dragHistory[this.dragHistory.length - 1];
         const dt = (last.t - first.t) / 1000;
         if (dt > 0.01) {
-          this.vx = Math.max(-1200, Math.min(1200, (last.x - first.x) / dt));
-          this.vy = Math.max(-1200, Math.min(1200, (last.y - first.y) / dt));
-          this.angularVelocity = (Math.random() - 0.5) * 8;
+          this.draggedBody.vx = Math.max(-1200, Math.min(1200, (last.x - first.x) / dt));
+          this.draggedBody.vy = Math.max(-1200, Math.min(1200, (last.y - first.y) / dt));
+          this.draggedBody.angularVelocity = (Math.random() - 0.5) * 8;
         }
       }
+      this.draggedBody = null;
     };
 
     chamber.addEventListener('mousedown', (e) => onPointerDown(e.clientX, e.clientY));
@@ -140,207 +224,231 @@ class GifPhysics {
 
   // Primary Physics Step
   update(dt, drumAngleDeg = 0, drumRPM = 0, waterLevel = 0, waterAgitation = 0) {
-    if (this.isDragging) return;
+    this.updateDrumDimensions();
+    if (this.bodies.length === 0) return;
 
     const absRPM = Math.abs(drumRPM);
     const drumOmega = (drumRPM * 2 * Math.PI) / 60; // rad/s
     const drumAngleRad = (drumAngleDeg * Math.PI) / 180;
 
-    // CENTRIFUGAL LOCK MODE (High-speed spin cycle > 180 RPM)
-    // When the centrifuge spins at high speed, clothes stay pinned to the drum wall
-    // and rotate synchronously with the drum, preventing any chaotic baffle collisions or jolting!
-    if (absRPM > 180) {
-      if (!this.isCentrifugalPinned) {
-        this.isCentrifugalPinned = true;
-        this.pinnedDrumOffset = Math.atan2(this.y, this.x) - drumAngleRad;
+    const count = this.bodies.length;
+    for (let i = 0; i < count; i++) {
+      const b = this.bodies[i];
+      if (this.isDragging && this.draggedBody === b) continue;
+
+      // CENTRIFUGAL LOCK MODE (High-speed spin cycle > 180 RPM)
+      if (absRPM > 180) {
+        if (!b.isCentrifugalPinned) {
+          b.isCentrifugalPinned = true;
+          b.pinnedDrumOffset = (i / count) * Math.PI * 2;
+        }
+
+        const currentAngle = drumAngleRad + b.pinnedDrumOffset;
+        b.x = Math.cos(currentAngle) * this.maxRadius;
+        b.y = Math.sin(currentAngle) * this.maxRadius;
+        b.vx = -drumOmega * b.y;
+        b.vy = drumOmega * b.x;
+        b.angle = currentAngle + Math.PI / 2;
+        b.angularVelocity = drumOmega;
+
+        const stretch = 1 + Math.min(0.22, absRPM / 4500);
+        b.squashX = stretch;
+        b.squashY = 1 / stretch;
+        continue;
       }
 
-      // Smooth synchronous circular orbit pinned against the wall
-      const currentAngle = drumAngleRad + this.pinnedDrumOffset;
-      this.x = Math.cos(currentAngle) * this.maxRadius;
-      this.y = Math.sin(currentAngle) * this.maxRadius;
+      if (b.isCentrifugalPinned) {
+        b.isCentrifugalPinned = false;
+        b.vx = -drumOmega * b.y * 0.7;
+        b.vy = drumOmega * b.x * 0.7;
+        b.squashX = 1;
+        b.squashY = 1;
+      }
 
-      this.vx = -drumOmega * this.y;
-      this.vy = drumOmega * this.x;
+      // Sub-stepping for smooth physics & baffle collision
+      const subSteps = 6;
+      const sdt = dt / subSteps;
+      for (let s = 0; s < subSteps; s++) {
+        this.stepBody(b, sdt, drumAngleRad, drumOmega, drumRPM, waterLevel, waterAgitation);
+      }
 
-      this.angle = currentAngle + Math.PI / 2;
-      this.angularVelocity = drumOmega;
-
-      // Centrifugal radial stretch
-      const stretch = 1 + Math.min(0.22, absRPM / 4500);
-      this.squashX = stretch;
-      this.squashY = 1 / stretch;
-      return;
+      b.squashX += (1 - b.squashX) * (dt * 10);
+      b.squashY += (1 - b.squashY) * (dt * 10);
     }
 
-    // Release from centrifugal lock when decelerating below 180 RPM
-    if (this.isCentrifugalPinned) {
-      this.isCentrifugalPinned = false;
-      this.vx = -drumOmega * this.y * 0.7;
-      this.vy = drumOmega * this.x * 0.7;
-      this.squashX = 1;
-      this.squashY = 1;
+    // Inter-body soft collision/repulsion
+    if (count > 1) {
+      this.resolveInterBodyCollisions();
     }
 
-    // Sub-stepping for smooth ramp sliding
-    const subSteps = 6;
-    const sdt = dt / subSteps;
-
-    for (let step = 0; step < subSteps; step++) {
-      this.physicsSubStep(sdt, drumAngleRad, drumOmega, drumRPM, waterLevel, waterAgitation);
+    // Apply transform to DOM elements
+    for (const b of this.bodies) {
+      if (b.el) {
+        b.el.style.transform = `translate(${b.x.toFixed(2)}px, ${b.y.toFixed(2)}px) rotate(${b.angle.toFixed(3)}rad) scale(${b.squashX.toFixed(3)}, ${b.squashY.toFixed(3)})`;
+      }
     }
 
-    // Recover squash & stretch back to 1.0
-    this.squashX += (1 - this.squashX) * (dt * 10);
-    this.squashY += (1 - this.squashY) * (dt * 10);
+    this.syncLegacyProps();
   }
 
-  physicsSubStep(dt, drumAngle, drumOmega, drumRPM, waterLevel, waterAgitation) {
+  resolveInterBodyCollisions() {
+    const count = this.bodies.length;
+    for (let i = 0; i < count; i++) {
+      for (let j = i + 1; j < count; j++) {
+        const b1 = this.bodies[i];
+        const b2 = this.bodies[j];
+        if (b1.isCentrifugalPinned || b2.isCentrifugalPinned) continue;
+
+        const dx = b2.x - b1.x;
+        const dy = b2.y - b1.y;
+        const dist = Math.hypot(dx, dy);
+        const minDist = b1.radius + b2.radius;
+
+        if (dist < minDist && dist > 0.001) {
+          const overlap = minDist - dist;
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          b1.x -= nx * overlap * 0.5;
+          b1.y -= ny * overlap * 0.5;
+          b2.x += nx * overlap * 0.5;
+          b2.y += ny * overlap * 0.5;
+
+          const relVx = b2.vx - b1.vx;
+          const relVy = b2.vy - b1.vy;
+          const normalVel = relVx * nx + relVy * ny;
+
+          if (normalVel < 0) {
+            const impulse = -(1 + this.restitution) * normalVel * 0.5;
+            b1.vx -= impulse * nx;
+            b1.vy -= impulse * ny;
+            b2.vx += impulse * nx;
+            b2.vy += impulse * ny;
+          }
+        }
+      }
+    }
+  }
+
+  stepBody(b, dt, drumAngle, drumOmega, drumRPM, waterLevel, waterAgitation) {
     const absRPM = Math.abs(drumRPM);
 
-    // 1. FORCES: DOWNWARD GRAVITY
+    // 1. FORCES: GRAVITY
     let fx = 0;
-    let fy = this.gravity * this.mass;
+    let fy = this.gravity * b.mass;
 
-    // 2. CENTRIFUGAL PINNING (Only kicks in during high-speed spin cycle > 300 RPM)
+    // 2. CENTRIFUGAL PINNING FORCE
     if (absRPM > 260) {
-      const spinBlend = Math.min(1.0, (absRPM - 260) / 200); // 0 at 260 RPM -> 1.0 at 460+ RPM
-      const dist = Math.hypot(this.x, this.y) || 1;
-      const outwardX = this.x / dist;
-      const outwardY = this.y / dist;
+      const spinBlend = Math.min(1.0, (absRPM - 260) / 200);
+      const dist = Math.hypot(b.x, b.y) || 1;
+      const outwardX = b.x / dist;
+      const outwardY = b.y / dist;
 
       const centrifugalForce = Math.min(26000, (drumOmega * drumOmega * dist) * 0.52);
-      fx += outwardX * centrifugalForce * this.mass * spinBlend;
-      fy += outwardY * centrifugalForce * this.mass * spinBlend;
+      fx += outwardX * centrifugalForce * b.mass * spinBlend;
+      fy += outwardY * centrifugalForce * b.mass * spinBlend;
     }
 
-    // 3. WATER BUOYANCY & BOBBING DYNAMICS
+    // 3. WATER BUOYANCY & BOBBING
     if (waterLevel > 0.04) {
       const waterHeight = this.drumRadius * 2 * waterLevel;
       const baseSurfaceY = this.drumRadius - waterHeight;
 
-      // Realistic sinusoidal water wave sloshing across the drum
       const now = performance.now() * 0.003;
       const waveAmp = (14 * waterAgitation + 5);
-      const waveSurfaceY = baseSurfaceY + Math.sin(now * 3.2 + this.x * 0.035) * waveAmp
-                                        + Math.cos(now * 1.6 - this.x * 0.02) * (waveAmp * 0.45);
+      const waveSurfaceY = baseSurfaceY + Math.sin(now * 3.2 + b.x * 0.035 + b.floatPhase) * waveAmp
+                                        + Math.cos(now * 1.6 - b.x * 0.02 + b.floatPhase) * (waveAmp * 0.45);
 
-      // GIF immersion depth relative to sloshing wave surface
-      const gifBottom = this.y + this.gifRadius;
+      const gifBottom = b.y + b.radius;
       const depthInWater = gifBottom - waveSurfaceY;
 
       if (depthInWater > 0) {
-        // Submerged fraction: 0.0 (touching crest) to 1.0 (fully submerged)
-        const submergedFraction = Math.min(1.0, depthInWater / (this.gifRadius * 1.6));
-
-        // Buoyant upward force:
-        // Exceeds gravity when submerged to lift clothes to float on the surface!
+        const submergedFraction = Math.min(1.0, depthInWater / (b.radius * 1.6));
         const buoyancyForce = this.gravity * (1.15 + submergedFraction * 1.65);
-        fy -= buoyancyForce * this.mass;
+        fy -= buoyancyForce * b.mass;
 
-        // Harmonic surface bobbing spring:
-        // Laundry floats naturally bobbing around the waterline
-        const targetEquilibriumY = waveSurfaceY + (this.gifRadius * 0.4);
-        const bobDisplacement = this.y - targetEquilibriumY;
-        const bobSpring = 950 * (bobDisplacement / this.gifRadius);
-        fy -= bobSpring * this.mass;
+        const targetEquilibriumY = waveSurfaceY + (b.radius * 0.4);
+        const bobDisplacement = b.y - targetEquilibriumY;
+        const bobSpring = 950 * (bobDisplacement / b.radius);
+        fy -= bobSpring * b.mass;
 
-        // Sloshing water horizontal flow & surge:
-        // As the drum rotates or water agitates, water carries the laundry
-        const waterFlowVx = (drumOmega * 40) + Math.sin(now * 2.8) * (waterAgitation * 240);
-        const fluidDragX = 7.5 * submergedFraction;
-        fx += (waterFlowVx - this.vx) * fluidDragX * this.mass;
+        const waterFlowVx = (drumOmega * 35) + Math.sin(now * 2.8 + b.floatPhase) * (waterAgitation * 200);
+        const fluidDragX = 7.0 * submergedFraction;
+        fx += (waterFlowVx - b.vx) * fluidDragX * b.mass;
 
-        // Fluid damping (viscosity stops unnatural jitter while enabling organic bobbing)
         const fluidDampY = 5.5 * submergedFraction;
-        fy -= this.vy * fluidDampY * this.mass;
+        fy -= b.vy * fluidDampY * b.mass;
 
-        // Rotational wave tilt (laundry tilts organically with the water slope)
-        const targetWaveTilt = Math.cos(now * 3.2 + this.x * 0.035) * (0.35 * waterAgitation + 0.12)
-                             + (this.vx * 0.001);
-        const tiltTorque = (targetWaveTilt - this.angle) * (16 * submergedFraction);
-        this.angularVelocity += tiltTorque * dt;
-        this.angularVelocity *= Math.pow(0.88, dt * 60);
+        const targetWaveTilt = Math.cos(now * 3.2 + b.x * 0.035 + b.floatPhase) * (0.35 * waterAgitation + 0.12)
+                             + (b.vx * 0.001);
+        const tiltTorque = (targetWaveTilt - b.angle) * (16 * submergedFraction);
+        b.angularVelocity += tiltTorque * dt;
+        b.angularVelocity *= Math.pow(0.88, dt * 60);
       } else {
-        // Air resistance above water
-        fx -= this.vx * 0.35;
-        fy -= this.vy * 0.35;
-        this.angularVelocity *= Math.pow(0.97, dt * 60);
+        fx -= b.vx * 0.35;
+        fy -= b.vy * 0.35;
+        b.angularVelocity *= Math.pow(0.97, dt * 60);
       }
     } else {
-      // Dry drum air resistance
-      fx -= this.vx * 0.35;
-      fy -= this.vy * 0.35;
-      this.angularVelocity *= Math.pow(0.97, dt * 60);
+      fx -= b.vx * 0.35;
+      fy -= b.vy * 0.35;
+      b.angularVelocity *= Math.pow(0.97, dt * 60);
     }
 
-    // Integrate acceleration -> velocity
-    this.vx += (fx / this.mass) * dt;
-    this.vy += (fy / this.mass) * dt;
+    // Integrate acceleration
+    b.vx += (fx / b.mass) * dt;
+    b.vy += (fy / b.mass) * dt;
 
-    // Integrate velocity -> position
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
-    this.angle += this.angularVelocity * dt;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    b.angle += b.angularVelocity * dt;
 
-    // 4. CIRCULAR DRUM WALL INTERACTION (SLIDING, TUMBLING & SOFT LANDING)
-    const dist = Math.hypot(this.x, this.y);
+    // 4. CIRCULAR DRUM WALL INTERACTION
+    const dist = Math.hypot(b.x, b.y);
     if (dist >= this.maxRadius) {
-      const nx = -this.x / (dist || 1);
-      const ny = -this.y / (dist || 1);
+      const nx = -b.x / (dist || 1);
+      const ny = -b.y / (dist || 1);
 
-      // Clamp position directly onto drum boundary
-      this.x = -nx * this.maxRadius;
-      this.y = -ny * this.maxRadius;
+      b.x = -nx * this.maxRadius;
+      b.y = -ny * this.maxRadius;
 
-      // Normal velocity component
-      const vn = this.vx * nx + this.vy * ny;
-
-      if (vn < 0) { // Hitting drum wall
+      const vn = b.vx * nx + b.vy * ny;
+      if (vn < 0) {
         const impactSpeed = Math.abs(vn);
-
-        // SOFT CLOTH IMPACT: Low restitution prevents pinball bouncing!
         const normalImpulse = -(1 + this.restitution) * vn;
-        this.vx += normalImpulse * nx;
-        this.vy += normalImpulse * ny;
+        b.vx += normalImpulse * nx;
+        b.vy += normalImpulse * ny;
 
-        // Tangential friction along the drum curve
         const tx = -ny;
         const ty = nx;
         const wallSpeed = drumOmega * this.drumRadius;
-        const relVt = (this.vx * tx + this.vy * ty) - wallSpeed;
+        const relVt = (b.vx * tx + b.vy * ty) - wallSpeed;
 
         const frictionCoeff = (absRPM > 260) ? 0.75 : this.wallFriction;
         const frictionImpulse = -relVt * frictionCoeff;
 
-        this.vx += frictionImpulse * tx;
-        this.vy += frictionImpulse * ty;
+        b.vx += frictionImpulse * tx;
+        b.vy += frictionImpulse * ty;
 
-        // Roll spin from sliding along wall
-        this.angularVelocity += (frictionImpulse * this.gifRadius * 0.4) / this.rotationalInertia;
-        this.angularVelocity *= 0.92;
+        b.angularVelocity += (frictionImpulse * b.radius * 0.4) / this.rotationalInertia;
+        b.angularVelocity *= 0.92;
 
         if (impactSpeed > 90) {
           const squish = Math.min(0.25, impactSpeed / 900);
-          this.squashX = 1 + squish;
-          this.squashY = 1 - squish;
-
+          b.squashX = 1 + squish;
+          b.squashY = 1 - squish;
           this.triggerLaundryThud(impactSpeed);
         }
       }
     }
 
-    // 5. TRIANGULAR WEDGE BAFFLE COLLISIONS (SLOPED RAMPS: NEVER GETS STUCK!)
-    this.simulateTriangularBaffles(drumAngle, drumOmega, absRPM, dt);
+    // 5. TRIANGULAR BAFFLE COLLISIONS
+    this.simulateTriangularBaffles(b, drumAngle, drumOmega, absRPM, dt);
   }
 
-  // Simulates the 3 baffles as TRIANGULAR WEDGES with angled ramps on both sides
-  // Correctly aligned with visual baffles starting at 12 o'clock (-PI/2)
-  simulateTriangularBaffles(drumAngle, drumOmega, absRPM, dt) {
-    if (absRPM < 1) return; // Machine stopped
+  simulateTriangularBaffles(b, drumAngle, drumOmega, absRPM, dt) {
+    if (absRPM < 1) return;
 
-    // Visual baffles are positioned at top (12 o'clock), 4 o'clock, and 8 o'clock.
-    // In Cartesian coordinates, 12 o'clock is -PI/2 (-90 degrees).
     const topOffset = -Math.PI / 2;
     const baffleAngles = [
       drumAngle + topOffset,
@@ -348,96 +456,73 @@ class GifPhysics {
       drumAngle + topOffset + (4 * Math.PI) / 3
     ];
 
-    const rWall = this.drumRadius;          // 168px
-    const rApex = this.drumRadius - 48;     // 120px (height of triangle is 48px)
-    const baseHalfAngle = 0.26;             // ~15 degrees half-width on drum wall (~44px base)
+    const rWall = this.drumRadius;
+    const rApex = this.drumRadius - Math.min(48, this.drumRadius * 0.28);
+    const baseHalfAngle = 0.26;
 
     for (const bAngle of baffleAngles) {
-      // 1. Apex (Tip pointing inward toward drum center)
       const apexX = Math.cos(bAngle) * rApex;
       const apexY = Math.sin(bAngle) * rApex;
 
-      // 2. Base Left Corner on drum wall
       const base1X = Math.cos(bAngle - baseHalfAngle) * rWall;
       const base1Y = Math.sin(bAngle - baseHalfAngle) * rWall;
 
-      // 3. Base Right Corner on drum wall
       const base2X = Math.cos(bAngle + baseHalfAngle) * rWall;
       const base2Y = Math.sin(bAngle + baseHalfAngle) * rWall;
 
-      // Collide with both sloped sides of the triangle:
-      // Side 1: Ramp from Base1 -> Apex
-      this.collideWithRampSegment(base1X, base1Y, apexX, apexY, drumOmega);
-
-      // Side 2: Ramp from Base2 -> Apex
-      this.collideWithRampSegment(base2X, base2Y, apexX, apexY, drumOmega);
+      this.collideWithRampSegment(b, base1X, base1Y, apexX, apexY, drumOmega);
+      this.collideWithRampSegment(b, base2X, base2Y, apexX, apexY, drumOmega);
     }
   }
 
-  // Collides GIF with a sloped ramp segment of the triangular baffle
-  collideWithRampSegment(x1, y1, x2, y2, drumOmega) {
+  collideWithRampSegment(b, x1, y1, x2, y2, drumOmega) {
     const dx = x2 - x1;
     const dy = y2 - y1;
     const segLenSq = dx * dx + dy * dy;
     if (segLenSq < 1) return;
 
-    // Project GIF center onto the ramp segment
-    let u = ((this.x - x1) * dx + (this.y - y1) * dy) / segLenSq;
-    // When u <= 0.05, the GIF is flush on the drum wall; let the drum wall handle it seamlessly
+    let u = ((b.x - x1) * dx + (b.y - y1) * dy) / segLenSq;
     if (u <= 0.05) return;
     u = Math.min(1, u);
 
-    // Closest point on the ramp slope
     const qx = x1 + u * dx;
     const qy = y1 + u * dy;
 
-    const distX = this.x - qx;
-    const distY = this.y - qy;
+    const distX = b.x - qx;
+    const distY = b.y - qy;
     const dist = Math.hypot(distX, distY);
-    const colRadius = this.gifRadius; // smooth tangent collision
+    const colRadius = b.radius;
 
     if (dist < colRadius && dist > 0.001) {
-      // Outward normal pushing GIF away from the ramp slope into the drum
       const nx = distX / dist;
       const ny = distY / dist;
 
-      // Push GIF out along normal (resolves penetration smoothly)
       const penetration = colRadius - dist;
-      this.x += nx * penetration;
-      this.y += ny * penetration;
+      b.x += nx * penetration;
+      b.y += ny * penetration;
 
-      // Velocity of contact point on the rotating baffle
       const baffleVx = -drumOmega * qy;
       const baffleVy = drumOmega * qx;
 
-      // Relative velocity of GIF against the ramp
-      const relVx = this.vx - baffleVx;
-      const relVy = this.vy - baffleVy;
-
-      // Normal velocity component
+      const relVx = b.vx - baffleVx;
+      const relVy = b.vy - baffleVy;
       const vn = relVx * nx + relVy * ny;
 
-      if (vn < 0) { // Moving towards ramp face
+      if (vn < 0) {
         const impact = Math.abs(vn);
+        b.vx -= (1 + this.baffleRestitution) * vn * nx;
+        b.vy -= (1 + this.baffleRestitution) * vn * ny;
 
-        // Soft cloth normal reaction (low restitution, no rubber ball bounce)
-        this.vx -= (1 + this.baffleRestitution) * vn * nx;
-        this.vy -= (1 + this.baffleRestitution) * vn * ny;
-
-        // Tangent along the sloped ramp
         const segLen = Math.sqrt(segLenSq);
         const tx = dx / segLen;
         const ty = dy / segLen;
 
-        // Sloped ramp allows smooth sliding with minimal friction:
-        // Gravity naturally accelerates the GIF along the ramp so it slides off the apex!
         const vt = relVx * tx + relVy * ty;
-        const rampSlideFriction = 0.06; // Very slippery ramp slope!
-        this.vx -= vt * rampSlideFriction * tx;
-        this.vy -= vt * rampSlideFriction * ty;
+        const rampSlideFriction = 0.06;
+        b.vx -= vt * rampSlideFriction * tx;
+        b.vy -= vt * rampSlideFriction * ty;
 
-        // Rotation spin from sliding off ramp
-        this.angularVelocity = drumOmega * 0.65;
+        b.angularVelocity = drumOmega * 0.65;
 
         if (impact > 95) {
           this.triggerLaundryThud(impact);
@@ -448,7 +533,7 @@ class GifPhysics {
 
   triggerLaundryThud(impactSpeed) {
     const now = performance.now();
-    if (now - this.lastThudTime < 140) return;
+    if (now - this.lastThudTime < 130) return;
     this.lastThudTime = now;
 
     if (this.washer && this.washer.audio) {

@@ -513,6 +513,11 @@ class WasherAudio {
     });
   }
 
+  // Alias for completion chime
+  playCompletionChime() {
+    this.playEndJingle();
+  }
+
   stopAll() {
     this.stopWaterFill();
     this.stopTumble();

@@ -19,14 +19,17 @@ class WasherMachine {
     this.tumbleDirection = 1; // 1 = clockwise, -1 = counter-clockwise
     this.tumbleTimer = 0;
 
-    // GIF transform & grime state
+    // Drum & Media state (supports up to 5 items)
+    this.mediaChamber = document.getElementById('media-chamber');
+    this.items = []; // array of { src, isGif, wrapperEl, imgEl, grimeEl }
+    this.itemElements = [];
     this.gifWrapper = document.getElementById('washing-gif-wrapper');
     this.gifElement = document.getElementById('washing-gif');
     this.gifGrimeOverlay = document.getElementById('gif-grime-overlay');
     this.drumElement = document.getElementById('inner-drum');
     this.washerChassis = document.getElementById('washer-chassis');
 
-    // 2D Rigid Body Physics Engine for GIF inside drum
+    // 2D Rigid Body Physics Engine for GIFs inside drum
     this.physics = new GifPhysics(this);
 
     this.grimeLevel = 1.0; // 1.0 = dirty, 0.0 = squeaky clean
@@ -45,35 +48,93 @@ class WasherMachine {
     if (this.onSpeedChange) this.onSpeedChange(multiplier);
   }
 
-  loadMedia(src, isGif = true) {
-    this.hasItemLoaded = true;
-    if (this.gifWrapper) {
-      this.gifWrapper.style.visibility = 'visible';
+  // Load single or multiple media items (up to 5)
+  loadMedia(srcOrList, isGif = true) {
+    if (Array.isArray(srcOrList)) {
+      this.items = srcOrList.slice(0, 5).map(item => {
+        if (typeof item === 'string') return { src: item, isGif: true };
+        return { src: item.src, isGif: item.isGif !== false };
+      });
+    } else if (srcOrList) {
+      this.items = [{ src: srcOrList, isGif }];
+    } else {
+      this.items = [];
     }
-    if (this.gifElement) {
-      this.gifElement.src = src;
-      this.gifElement.style.display = 'block';
-    }
+    this.renderItems();
     this.resetCycle();
     this.setGrimeLevel(1.0);
-    if (this.physics && this.gifWrapper) {
-      this.gifWrapper.style.transform = this.physics.getTransform();
+    if (this.onMediaLoaded) this.onMediaLoaded(this.items.length);
+  }
+
+  // Add an additional item to the drum (up to 5 max)
+  addMedia(src, isGif = true) {
+    if (this.items.length >= 5) return false;
+    this.items.push({ src, isGif });
+    this.renderItems();
+    this.resetCycle();
+    this.setGrimeLevel(1.0);
+    if (this.onMediaLoaded) this.onMediaLoaded(this.items.length);
+    return true;
+  }
+
+  renderItems() {
+    if (!this.mediaChamber) {
+      this.mediaChamber = document.getElementById('media-chamber');
+      if (!this.mediaChamber) return;
     }
-    if (this.onMediaLoaded) this.onMediaLoaded();
+    this.mediaChamber.innerHTML = '';
+    this.itemElements = [];
+
+    const isMulti = this.items.length > 1;
+    this.items.forEach((item, index) => {
+      const wrapper = document.createElement('div');
+      wrapper.className = `washing-gif-wrapper ${isMulti ? 'multi-item' : ''}`;
+      wrapper.id = `washing-gif-wrapper-${index}`;
+
+      const img = document.createElement('img');
+      img.className = 'washing-gif';
+      img.src = item.src;
+      img.alt = `Laundry item ${index + 1}`;
+
+      const grime = document.createElement('div');
+      grime.className = 'gif-grime-overlay';
+      grime.innerHTML = `
+        <div class="dirt-stain stain-1"></div>
+        <div class="dirt-stain stain-2"></div>
+        <div class="dirt-stain stain-3"></div>
+      `;
+
+      wrapper.appendChild(img);
+      wrapper.appendChild(grime);
+      this.mediaChamber.appendChild(wrapper);
+
+      item.wrapperEl = wrapper;
+      item.imgEl = img;
+      item.grimeEl = grime;
+      this.itemElements.push(wrapper);
+    });
+
+    if (this.physics) {
+      this.physics.setBodies(this.itemElements);
+    }
+
+    this.hasItemLoaded = this.items.length > 0;
+    this.gifWrapper = this.itemElements[0] || null;
+    this.gifElement = this.items[0]?.imgEl || null;
+    this.gifGrimeOverlay = this.items[0]?.grimeEl || null;
   }
 
   setGrimeLevel(level) {
     this.grimeLevel = Math.max(0, Math.min(1, level));
-    if (this.gifGrimeOverlay) {
-      this.gifGrimeOverlay.style.opacity = this.grimeLevel.toString();
-    }
-    if (this.gifElement) {
-      // Filter increases cleanliness (starts with slight blur & sepia/noise, ends crisp)
-      const sepia = Math.round(this.grimeLevel * 35);
-      const blur = (this.grimeLevel * 1.5).toFixed(1);
-      const brightness = (1.2 - this.grimeLevel * 0.35).toFixed(2);
-      const contrast = (1.15 - this.grimeLevel * 0.25).toFixed(2);
-      this.gifElement.style.filter = `sepia(${sepia}%) blur(${blur}px) brightness(${brightness}) contrast(${contrast})`;
+    const sepia = Math.round(this.grimeLevel * 35);
+    const blur = (this.grimeLevel * 1.5).toFixed(1);
+    const brightness = (1.2 - this.grimeLevel * 0.35).toFixed(2);
+    const contrast = (1.15 - this.grimeLevel * 0.25).toFixed(2);
+    const filter = `sepia(${sepia}%) blur(${blur}px) brightness(${brightness}) contrast(${contrast})`;
+
+    for (const item of this.items) {
+      if (item.grimeEl) item.grimeEl.style.opacity = this.grimeLevel.toString();
+      if (item.imgEl) item.imgEl.style.filter = filter;
     }
   }
 
@@ -440,8 +501,8 @@ class WasherMachine {
       this.drumElement.style.transform = `rotate(${this.drumAngle}deg)`;
     }
 
-    // 2D Rigid Body Physics tumbling
-    if (this.physics && this.gifWrapper) {
+    // 2D Rigid Body Physics tumbling for all laundry items
+    if (this.physics && this.items.length > 0) {
       const simDt = Math.min(0.04, dt * this.speedMultiplier);
       this.physics.update(
         simDt,
@@ -450,7 +511,6 @@ class WasherMachine {
         (this.water ? this.water.waterLevel : 0),
         (this.water ? (this.water.waterAgitation || this.water.agitation || 0) : 0)
       );
-      this.gifWrapper.style.transform = this.physics.getTransform();
     }
   }
 
@@ -462,7 +522,11 @@ class WasherMachine {
     this.lockDoor(false);
     this.setMachineShake('none');
     this.audio.stopAll();
-    this.audio.playCompletionChime();
+    if (this.audio.playEndJingle) {
+      this.audio.playEndJingle();
+    } else if (this.audio.playCompletionChime) {
+      this.audio.playCompletionChime();
+    }
 
     this.water.setWaterLevel(0);
     this.water.setAgitation(0);

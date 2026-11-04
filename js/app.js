@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const waterCanvas = new WaterCanvas(canvasElement);
   const audio = window.washerAudio;
   const washer = new WasherMachine(waterCanvas, audio);
+  window.washer = washer;
 
   // 2. DOM Elements
   const timerDisplay = document.getElementById('timer-display');
@@ -20,22 +21,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const doorGlass = document.querySelector('.door-glass');
   const doorOpenPrompt = document.getElementById('door-open-prompt');
   let awaitingCollectOpen = false;
-
-  const completionModal = document.getElementById('completion-modal');
-  const btnDownloadWashed = document.getElementById('btn-download-washed');
-  const btnWashAgain = document.getElementById('btn-wash-again');
-  const cleanResultImg = document.getElementById('clean-result-img');
+  let completionAutoTimer = null;
+  let isFallingOut = false;
 
   const triviaTicker = document.getElementById('trivia-ticker');
 
   // 3. Fun Laundromat Trivia & Tips
   const laundryMemeFacts = [
-    "Tip: Never wash a rare meme in water above 40°C to preserve pixel borders.",
+    "Never wash a rare meme in water above 40°C to preserve pixel borders.",
     "99.4% of crusty Reddit compression artifacts are now dissolved.",
     "Missing Sock Alert: One white gym sock was found in the dryer's lint filter.",
     "Laundromat Etiquette: Please do not leave your GIFs unattended for more than 48 hours.",
-    "Watching your meme spin in a circle is clinically proven to lower stress.",
-    "Recommended dry cycle: Tumble dry low or hang dry on a high-speed fiber cable.",
+    "Watching your memes spin in circles is clinically proven to lower stress.",
+    "Recommended dry cycle: Tumble dry low or hang dry on a high-speed network cable.",
     "Removing 15 years of repost watermarks, Ifunny tags, and bad screenshot borders."
   ];
   let factIndex = 0;
@@ -51,33 +49,49 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 12000);
   }
 
-  // 4. File Upload & Drag-and-Drop Handlers
-  let currentLoadedSrc = 'assets/sample-cat.gif';
+  // 4. File Upload & Drag-and-Drop Handlers (Supports up to 5 images / GIFs)
+  let loadedMediaList = [];
 
-  function handleFile(file) {
-    if (!file || !file.type.startsWith('image/')) {
-      alert('Please select a valid image or GIF file!');
+  function handleFiles(files) {
+    if (!files || files.length === 0) return;
+    const validFiles = Array.from(files).filter(f => f.type && f.type.startsWith('image/'));
+    if (validFiles.length === 0) {
+      alert('Please select valid image or GIF files!');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      currentLoadedSrc = e.target.result;
-      const gifWrapper = document.getElementById('washing-gif-wrapper');
-      if (gifWrapper) gifWrapper.style.visibility = 'visible';
 
-      washer.loadMedia(currentLoadedSrc, file.type === 'image/gif');
-      washer.closeDoor();
-      audio.playDoorLock(false);
-      awaitingCollectOpen = false;
-      if (doorOpenPrompt) doorOpenPrompt.classList.remove('visible');
-    };
-    reader.readAsDataURL(file);
+    const availableSlots = 5 - loadedMediaList.length;
+    if (availableSlots <= 0) {
+      showToast('⚠️ Drum is full! Maximum 5 items already loaded.');
+      return;
+    }
+
+    const filesToLoad = validFiles.slice(0, availableSlots);
+    let loadedCount = 0;
+
+    filesToLoad.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        loadedMediaList.push(e.target.result);
+        loadedCount++;
+
+        if (loadedCount === filesToLoad.length) {
+          washer.loadMedia(loadedMediaList);
+          washer.closeDoor();
+          audio.playDoorLock(false);
+          awaitingCollectOpen = false;
+          if (doorOpenPrompt) doorOpenPrompt.classList.remove('visible');
+        }
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
   if (fileInput) {
     fileInput.addEventListener('change', (e) => {
       if (e.target.files.length > 0) {
-        handleFile(e.target.files[0]);
+        handleFiles(e.target.files);
+        fileInput.value = '';
       }
     });
   }
@@ -108,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
     target.addEventListener('drop', (e) => {
       const dt = e.dataTransfer;
       if (dt.files && dt.files.length > 0) {
-        handleFile(dt.files[0]);
+        handleFiles(dt.files);
       }
     });
   });
@@ -126,16 +140,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if (washer.state === 'RUNNING' && washer.isDoorLocked) return;
 
     if (awaitingCollectOpen) {
+      clearTimeout(completionAutoTimer);
       awaitingCollectOpen = false;
       if (doorOpenPrompt) {
         doorOpenPrompt.classList.remove('visible');
       }
 
       audio.playDialClick();
-      // Open the door WITHOUT immediately showing the dropzone prompt
       washer.openDoor(true, false);
 
-      // Execute GIF falling out, down and offscreen!
+      // Execute all GIFs falling out, down and offscreen!
       executeGifFallOut();
       return;
     }
@@ -150,58 +164,73 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function executeGifFallOut() {
-    const gifWrapper = document.getElementById('washing-gif-wrapper');
-    if (!gifWrapper) return;
+    if (isFallingOut) return;
+    isFallingOut = true;
 
-    // Capture screen bounding rectangle of the GIF inside drum
-    const rect = gifWrapper.getBoundingClientRect();
+    clearTimeout(completionAutoTimer);
+    awaitingCollectOpen = false;
+    if (doorOpenPrompt) {
+      doorOpenPrompt.classList.remove('visible');
+    }
 
-    // Create falling clone on document body
-    const fallingClone = document.createElement('div');
-    fallingClone.className = 'falling-laundry-clone';
-    fallingClone.style.left = `${rect.left}px`;
-    fallingClone.style.top = `${rect.top}px`;
-    fallingClone.style.width = `${rect.width}px`;
-    fallingClone.style.height = `${rect.height}px`;
+    const wrappers = document.querySelectorAll('.washing-gif-wrapper');
+    if (!wrappers || wrappers.length === 0) {
+      loadedMediaList = [];
+      washer.loadMedia([]);
+      washer.state = 'IDLE';
+      washer.resetCycle();
+      washer.openDoor(false, true);
+      updateStageStack('IDLE');
+      isFallingOut = false;
+      return;
+    }
 
-    const cloneImg = document.createElement('img');
-    cloneImg.src = currentLoadedSrc;
-    cloneImg.style.width = '100%';
-    cloneImg.style.height = '100%';
-    cloneImg.style.objectFit = 'contain';
-    cloneImg.style.borderRadius = '12px';
-    cloneImg.style.boxShadow = '0 15px 35px rgba(0, 0, 0, 0.6)';
+    const count = wrappers.length;
+    const clones = [];
 
-    fallingClone.appendChild(cloneImg);
-    document.body.appendChild(fallingClone);
+    wrappers.forEach((wrapper, index) => {
+      const rect = wrapper.getBoundingClientRect();
+      const clone = document.createElement('div');
+      clone.className = 'falling-laundry-clone';
+      clone.style.left = `${rect.left}px`;
+      clone.style.top = `${rect.top}px`;
+      clone.style.width = `${rect.width}px`;
+      clone.style.height = `${rect.height}px`;
+      clone.style.animationDelay = `${index * 60}ms`;
 
-    // Hide original in drum while falling
-    gifWrapper.style.visibility = 'hidden';
+      const cloneImg = document.createElement('img');
+      const innerImg = wrapper.querySelector('img');
+      cloneImg.src = loadedMediaList[index] || (innerImg ? innerImg.src : '');
+      cloneImg.style.width = '100%';
+      cloneImg.style.height = '100%';
+      cloneImg.style.objectFit = 'contain';
+      cloneImg.style.borderRadius = '12px';
+      cloneImg.style.boxShadow = '0 15px 35px rgba(0, 0, 0, 0.6)';
 
-    // Wet laundry flop audio
-    audio.playDrumThud(420);
+      clone.appendChild(cloneImg);
+      document.body.appendChild(clone);
+      clones.push(clone);
 
-    // Animate falling out, down and offscreen!
-    requestAnimationFrame(() => {
-      fallingClone.classList.add('falling-down-offscreen');
+      wrapper.style.visibility = 'hidden';
     });
 
-    // Once it has fallen offscreen (~850ms)
+    audio.playDrumThud(450);
+
+    requestAnimationFrame(() => {
+      clones.forEach(c => c.classList.add('falling-down-offscreen'));
+    });
+
     setTimeout(() => {
-      fallingClone.remove();
+      clones.forEach(c => c.remove());
 
-      // Show the drum open prompt saying to insert a GIF!
-      if (dropZone) {
-        dropZone.classList.add('visible');
-      }
-
-      showToast('🧺 GIF fell out clean! Insert a new GIF to wash.');
-
-      // Present completion modal for download
-      setTimeout(() => {
-        if (cleanResultImg) cleanResultImg.src = currentLoadedSrc;
-        if (completionModal) completionModal.classList.add('visible');
-      }, 400);
+      // CLEAR OLD MEDIA & RESET MACHINE READY FOR NEXT LOAD
+      loadedMediaList = [];
+      washer.loadMedia([]);
+      washer.state = 'IDLE';
+      washer.resetCycle();
+      washer.openDoor(false, true); // Keep door open, show drum-dropzone
+      updateStageStack('IDLE');
+      isFallingOut = false;
     }, 850);
   }
 
@@ -273,9 +302,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const mins = Math.floor(info.remaining / 60);
     const secs = Math.floor(info.remaining % 60);
     const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-    
+
     if (timerDisplay) timerDisplay.textContent = timeStr;
-    
+
     if (cycleProgressBar) {
       const pct = ((info.elapsed / info.total) * 100).toFixed(1);
       cycleProgressBar.style.width = `${pct}%`;
@@ -308,6 +337,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (doorOpenPrompt) {
       doorOpenPrompt.classList.add('visible');
     }
+
+    // Auto-open door and tumble GIFs out after 1.8 seconds so you can load more
+    clearTimeout(completionAutoTimer);
+    completionAutoTimer = setTimeout(() => {
+      if (awaitingCollectOpen) {
+        handleDoorOpenAction();
+      }
+    }, 1800);
   };
 
   // 6. Start / Pause Control
@@ -330,45 +367,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 7. Completion Modal Handlers
-  if (btnWashAgain) {
-    btnWashAgain.addEventListener('click', () => {
-      if (completionModal) completionModal.classList.remove('visible');
-      const gifWrapper = document.getElementById('washing-gif-wrapper');
-      if (gifWrapper) gifWrapper.style.visibility = 'visible';
-      washer.resetCycle();
-      washer.openDoor(true, true);
-      updateStageStack('IDLE');
-    });
-  }
-
-  if (btnDownloadWashed) {
-    btnDownloadWashed.addEventListener('click', () => {
-      audio.playButtonBeep(880);
-      downloadCleanImage(currentLoadedSrc);
-    });
-  }
-
-  function downloadCleanImage(src) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      canvas.width = img.naturalWidth || 400;
-      canvas.height = img.naturalHeight || 400;
-
-      // Draw pristine clean image directly (no added text stamps)
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-      const link = document.createElement('a');
-      link.download = 'washed-clean-gif.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    };
-    img.src = src;
-  }
-
   // Toast Notification
   function showToast(msg) {
     const toast = document.getElementById('toast-notification');
@@ -381,7 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 4000);
   }
 
-  // Load default sample cat on startup and start with door open
-  washer.loadMedia(currentLoadedSrc, true);
+  // Start with empty drum and door open
+  washer.loadMedia(loadedMediaList);
   washer.openDoor(false);
 });
