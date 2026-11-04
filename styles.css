@@ -1,0 +1,967 @@
+/* WashaGif Pro 9000 - Front-Load GIF Washing Machine Stylesheet */
+
+:root {
+  --bg-dark: #0a0e17;
+  --bg-surface: #121826;
+  --bg-card: #182236;
+  --bg-card-border: #23324d;
+  
+  --washer-body-top: #e2e8f0;
+  --washer-body-mid: #cbd5e1;
+  --washer-body-dark: #94a3b8;
+  --washer-shadow: rgba(0, 0, 0, 0.65);
+  
+  --door-chrome-1: #ffffff;
+  --door-chrome-2: #94a3b8;
+  --door-chrome-3: #475569;
+  --door-chrome-4: #1e293b;
+  --drum-steel: #334155;
+  
+  --led-cyan: #00f2fe;
+  --led-cyan-glow: rgba(0, 242, 254, 0.65);
+  --led-amber: #f59e0b;
+  --led-amber-glow: rgba(245, 158, 11, 0.65);
+  --led-green: #10b981;
+  --led-green-glow: rgba(16, 185, 129, 0.65);
+  --led-off: #1e293b;
+  
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent-blue: #0284c7;
+  --accent-cyan: #00f2fe;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Background Atmosphere */
+.laundromat-background {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(circle at 50% 30%, #162033 0%, #0a0e17 80%);
+}
+
+.tile-grid-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.ambient-glow {
+  position: absolute;
+  top: 15%;
+  left: 20%;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(0, 242, 254, 0.08) 0%, transparent 70%);
+  filter: blur(80px);
+}
+
+/* Header */
+.app-header {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(10, 14, 23, 0.85);
+  backdrop-filter: blur(12px);
+}
+
+.logo-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.brand-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.badge-pro {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  background: linear-gradient(90deg, #f59e0b, #ef4444);
+  color: #fff;
+  border-radius: 6px;
+  letter-spacing: 1.5px;
+  font-weight: 900;
+}
+
+.btn-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-main);
+  padding: 0.6rem 1.2rem;
+  border-radius: 30px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.btn-pill:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+.btn-pill.muted {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Main Container Layout (Centered single-column layout) */
+.main-container {
+  position: relative;
+  z-index: 5;
+  max-width: 620px;
+  margin: 1.25rem auto 2.5rem;
+  padding: 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ========================================================
+   FRONT-LOAD WASHING MACHINE CHASSIS
+   ======================================================== */
+.machine-stage {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  perspective: 1200px;
+}
+
+.washer-chassis {
+  width: 100%;
+  max-width: 580px;
+  background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 40%, #cbd5e1 90%, #94a3b8 100%);
+  border-radius: 28px;
+  padding: 1.25rem 1.5rem 1.25rem 1.5rem;
+  box-shadow: 
+    0 25px 60px rgba(0, 0, 0, 0.8),
+    inset 0 2px 4px rgba(255, 255, 255, 0.9),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(255, 255, 255, 0.2);
+  position: relative;
+  transform-style: preserve-3d;
+  transition: box-shadow 0.2s ease, outline 0.2s ease;
+}
+
+.washer-chassis.drag-active {
+  outline: 3px dashed var(--accent-cyan);
+  outline-offset: 4px;
+  box-shadow: 0 0 35px rgba(0, 242, 254, 0.5), 0 25px 60px rgba(0, 0, 0, 0.8);
+}
+
+/* Screen Shake / Vibration Animations */
+.washer-chassis.shake-gentle {
+  animation: washerShakeGentle 0.12s infinite alternate;
+}
+
+.washer-chassis.shake-violent {
+  animation: washerShakeViolent 0.05s infinite alternate;
+}
+
+@keyframes washerShakeGentle {
+  0% { transform: translate(-1px, 0.5px) rotate(-0.15deg); }
+  100% { transform: translate(1px, -0.5px) rotate(0.15deg); }
+}
+
+@keyframes washerShakeViolent {
+  0% { transform: translate(-3.5px, 2px) rotate(-0.4deg); }
+  25% { transform: translate(2.5px, -2.5px) rotate(0.35deg); }
+  50% { transform: translate(-2px, -2px) rotate(-0.3deg); }
+  75% { transform: translate(3px, 1.5px) rotate(0.4deg); }
+  100% { transform: translate(-2.5px, 2.5px) rotate(-0.35deg); }
+}
+
+/* TOP CONTROL PANEL / FASCIA */
+.fascia-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #090d16;
+  border-radius: 18px;
+  padding: 1rem 1.4rem 1.15rem;
+  margin-bottom: 1rem;
+  box-shadow: 
+    inset 0 3px 8px rgba(0, 0, 0, 0.95),
+    0 1px 2px rgba(255, 255, 255, 0.4);
+  border: 2px solid #1e293b;
+  position: relative;
+}
+
+/* Display Row: Timer on Left, Stages Vertical Stack on Right */
+.fascia-display-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 440px;
+  margin-bottom: 0.95rem;
+  padding: 0 0.4rem;
+}
+
+.timer-column {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.digital-timer {
+  font-family: 'Orbitron', 'Chakra Petch', monospace;
+  font-size: 3.2rem;
+  font-weight: 900;
+  color: var(--led-cyan);
+  text-shadow: 0 0 16px var(--led-cyan-glow), 0 0 35px rgba(0, 242, 254, 0.45);
+  letter-spacing: 3px;
+  line-height: 1;
+  text-align: left;
+  margin-bottom: 0.25rem;
+}
+
+.timer-sublabel {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 2px;
+}
+
+/* Vertical Stack of Stages */
+.stages-vertical-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: rgba(15, 23, 42, 0.7);
+  padding: 0.45rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.stage-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #475569;
+  text-transform: uppercase;
+  transition: all 0.25s ease;
+}
+
+.stage-led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1e293b;
+  transition: all 0.25s ease;
+}
+
+.stage-item.active {
+  color: var(--led-cyan);
+  text-shadow: 0 0 8px var(--led-cyan-glow);
+}
+
+.stage-item.active .stage-led {
+  background: var(--led-cyan);
+  box-shadow: 0 0 8px var(--led-cyan), 0 0 14px rgba(0, 242, 254, 0.8);
+  transform: scale(1.25);
+}
+
+/* Row with Progress Bar on Left/Center, Start/Pause Button on Right */
+.fascia-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 440px;
+  gap: 1rem;
+}
+
+.fascia-panel .progress-track {
+  flex: 1;
+  height: 10px;
+  background: #1e293b;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+.progress-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #0284c7, #00f2fe);
+  box-shadow: 0 0 12px rgba(0, 242, 254, 0.9);
+  transition: width 0.3s linear;
+}
+
+.btn-fascia-start {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.6rem 1.35rem;
+  background: linear-gradient(135deg, #0284c7 0%, #00f2fe 100%);
+  color: #090d16;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 242, 254, 0.45);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-fascia-start:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 242, 254, 0.7);
+}
+
+.btn-fascia-start:active {
+  transform: translateY(1px);
+}
+
+.btn-fascia-start.running {
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+  color: #0f172a;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.45);
+}
+
+/* ========================================================
+   PORTHOLE DOOR & REVOLVING DRUM CHAMBER
+   ======================================================== */
+.drum-housing {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0 1rem;
+}
+
+.porthole-outer-frame {
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #475569 0%, #1e293b 80%, #0f172a 100%);
+  padding: 14px;
+  box-shadow: 
+    0 15px 35px rgba(0, 0, 0, 0.7),
+    inset 0 4px 8px rgba(0, 0, 0, 0.8),
+    inset 0 -3px 6px rgba(255, 255, 255, 0.3);
+  position: relative;
+}
+
+.drum-chamber {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: #0f172a;
+  position: relative;
+  overflow: hidden;
+  box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.95);
+  cursor: grab;
+}
+
+.drum-chamber:active {
+  cursor: grabbing;
+}
+
+/* The Stainless Steel Rotating Drum */
+.stainless-drum {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #475569 0%, #334155 60%, #1e293b 100%);
+  box-shadow: inset 0 0 35px rgba(0, 0, 0, 0.8);
+}
+
+/* 3 Baffles / Lifters (Triangular Wedge Lifters) */
+.drum-baffle {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform-origin: 50% 168px;
+  width: 44px;
+  height: 48px;
+  background: linear-gradient(135deg, #cbd5e1 0%, #64748b 50%, #334155 100%);
+  clip-path: polygon(50% 100%, 0% 0%, 100% 0%);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.7));
+}
+
+.baffle-1 { transform: translateX(-50%) rotate(0deg); }
+.baffle-2 { transform: translateX(-50%) rotate(120deg); }
+.baffle-3 { transform: translateX(-50%) rotate(240deg); }
+
+/* Perforated Drum Holes Pattern */
+.perforated-texture {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  background-image: radial-gradient(#0f172a 18%, transparent 19%);
+  background-size: 14px 14px;
+  opacity: 0.55;
+}
+
+/* Inside Media Chamber (Image / GIF) */
+.media-chamber {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.washing-gif-wrapper {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  transform: translate(0, 85px);
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.washing-gif {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.15);
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  transition: filter 0.3s ease;
+}
+
+/* Procedural Grime Overlay */
+.gif-grime-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 12px;
+  pointer-events: none;
+  background: radial-gradient(circle at 60% 40%, rgba(85, 60, 20, 0.45) 0%, rgba(40, 50, 20, 0.6) 80%);
+  mix-blend-mode: multiply;
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+
+.dirt-stain {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(60, 45, 15, 0.7);
+  filter: blur(3px);
+}
+
+.stain-1 { width: 45px; height: 35px; top: 15px; left: 20px; }
+.stain-2 { width: 55px; height: 45px; bottom: 20px; right: 25px; }
+.stain-3 { width: 30px; height: 25px; top: 45%; left: 40%; }
+
+/* Dynamic Water Canvas */
+.water-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 15;
+}
+
+/* ========================================================
+   FRONT LOAD PORTHOLE DOOR (3D SWING)
+   ======================================================== */
+.washer-door {
+  position: absolute;
+  top: -8px; left: -8px; right: -8px; bottom: -8px;
+  border-radius: 50%;
+  transform-origin: 15px center;
+  transform-style: preserve-3d;
+  transition: transform 0.65s cubic-bezier(0.25, 1, 0.5, 1);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.washer-door:not(.door-open) {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.washer-door.door-open {
+  transform: perspective(1000px) rotateY(-82deg);
+}
+
+.door-chrome-rim {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  border: 22px solid #85929e;
+  border-top-color: #f8fafc;
+  border-right-color: #475569;
+  border-bottom-color: #1e293b;
+  border-left-color: #cbd5e1;
+  box-shadow: 
+    0 15px 35px rgba(0, 0, 0, 0.8),
+    inset 0 0 0 3px #0f172a,
+    inset 0 4px 10px rgba(255, 255, 255, 0.7),
+    inset 0 -6px 12px rgba(0, 0, 0, 0.85),
+    0 0 0 4px #1e293b;
+  background: transparent;
+  pointer-events: none;
+}
+
+.door-glass {
+  position: absolute;
+  top: 22px; left: 22px; right: 22px; bottom: 22px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.07) 0%, rgba(15, 23, 42, 0.15) 75%);
+  box-shadow: 
+    inset 0 6px 14px rgba(255, 255, 255, 0.2),
+    inset 0 -6px 16px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.glass-reflection-specular {
+  position: absolute;
+  top: -20%; left: -20%; width: 140%; height: 70%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.03) 50%, transparent 70%);
+  transform: rotate(-25deg);
+  border-radius: 50%;
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+.door-handle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 70px;
+  background: linear-gradient(90deg, #e2e8f0, #94a3b8);
+  border-radius: 6px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.door-latch-pin {
+  width: 6px;
+  height: 25px;
+  background: #334155;
+  border-radius: 3px;
+}
+
+/* Open Drum Dropzone Overlay */
+.drum-dropzone {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.88);
+  border: 3px dashed var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, background 0.2s ease;
+  z-index: 25;
+  cursor: pointer;
+}
+
+.drum-dropzone.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drum-dropzone.drag-active {
+  background: rgba(2, 132, 199, 0.95);
+  border-color: #ffffff;
+}
+
+.dropzone-content {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1.5rem;
+}
+
+/* Prompt directly on washer door on completion */
+.door-open-prompt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) translateZ(25px) scale(0.9);
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.door-open-prompt.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) translateZ(25px) scale(1);
+}
+
+.door-prompt-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(15, 23, 42, 0.94);
+  border: 2px solid var(--accent-cyan);
+  padding: 1.1rem 1.6rem;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 25px rgba(0, 242, 254, 0.5);
+  animation: promptPulse 1.6s infinite alternate;
+}
+
+@keyframes promptPulse {
+  0% { transform: scale(1); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 242, 254, 0.4); }
+  100% { transform: scale(1.05); box-shadow: 0 15px 40px rgba(0, 0, 0, 0.9), 0 0 35px rgba(0, 242, 254, 0.7); }
+}
+
+.prompt-sparkle {
+  font-size: 1.8rem;
+  filter: drop-shadow(0 0 8px gold);
+}
+
+.prompt-text {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.prompt-action {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  letter-spacing: 1.2px;
+  text-shadow: 0 0 8px var(--accent-cyan);
+}
+
+/* Falling Clean Laundry Clone (Drops out, down and offscreen!) */
+.falling-laundry-clone {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  transition: transform 0.85s cubic-bezier(0.5, 0, 0.75, 0), opacity 0.85s ease-in;
+  will-change: transform, opacity;
+}
+
+.falling-laundry-clone.falling-down-offscreen {
+  transform: translate(35px, 850px) rotate(45deg) scale(1.15);
+  opacity: 0;
+}
+
+.drop-icon {
+  font-size: 2.5rem;
+  animation: bounceDrop 1.5s infinite;
+}
+
+@keyframes bounceDrop {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.drop-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--led-cyan);
+}
+
+.drop-desc {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  line-height: 1.4;
+}
+
+
+/* ========================================================
+   LAUNDROMAT LIVE TICKER
+   ======================================================== */
+.ticker-card.machine-ticker {
+  width: 100%;
+  max-width: 580px;
+  margin-top: 1.5rem;
+  padding: 1.1rem 1.4rem;
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.05);
+}
+
+/* Meme Ticker Card */
+.ticker-card {
+  padding: 1rem 1.25rem;
+  background: #0f172a;
+}
+
+.ticker-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  letter-spacing: 1px;
+  margin-bottom: 0.4rem;
+}
+
+.trivia-ticker {
+  font-size: 0.85rem;
+  color: #e2e8f0;
+  line-height: 1.4;
+  min-height: 2.6rem;
+  display: flex;
+  align-items: center;
+  transition: opacity 0.35s ease;
+}
+
+/* ========================================================
+   COMPLETION MODAL
+   ======================================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(10, 14, 23, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+  padding: 1.5rem;
+}
+
+.modal-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-content {
+  background: #182236;
+  border: 1px solid #2e4369;
+  border-radius: 24px;
+  padding: 2.5rem;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9), 0 0 40px rgba(0, 242, 254, 0.25);
+  transform: translateY(20px);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-overlay.visible .modal-content {
+  transform: translateY(0);
+}
+
+.modal-sparkles {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  animation: pulseSparkles 1.5s infinite alternate;
+}
+
+@keyframes pulseSparkles {
+  0% { transform: scale(1); filter: drop-shadow(0 0 5px gold); }
+  100% { transform: scale(1.15); filter: drop-shadow(0 0 15px gold); }
+}
+
+.modal-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.modal-subtitle {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  margin: 0.5rem 0 1.5rem;
+}
+
+.result-preview-box {
+  width: 220px;
+  height: 220px;
+  margin: 0 auto 1.75rem;
+  border-radius: 18px;
+  background: #0b1120;
+  border: 2px solid var(--accent-cyan);
+  box-shadow: 0 0 25px rgba(0, 242, 254, 0.3);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clean-result-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.btn-modal {
+  padding: 0.95rem 1.5rem;
+  border-radius: 14px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+  transition: all 0.2s ease;
+}
+
+.btn-download {
+  background: linear-gradient(135deg, #0284c7 0%, #00f2fe 100%);
+  color: #0f172a;
+  box-shadow: 0 8px 25px rgba(0, 242, 254, 0.4);
+}
+
+.btn-download:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 242, 254, 0.6);
+}
+
+.btn-secondary {
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #334155;
+}
+
+.btn-secondary:hover {
+  background: #334155;
+}
+
+/* Toast Notification */
+.toast {
+  position: fixed;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%) translateY(-100px);
+  background: #1e293b;
+  border: 1px solid var(--accent-cyan);
+  color: #f8fafc;
+  padding: 0.8rem 1.6rem;
+  border-radius: 30px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 20px rgba(0, 242, 254, 0.3);
+  z-index: 200;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.toast.show {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ========================================================
+   RESPONSIVE DESIGN
+   ======================================================== */
+@media (max-width: 580px) {
+  .app-header {
+    padding: 1rem 1.25rem;
+  }
+  .brand-title {
+    font-size: 1.2rem;
+  }
+  .washer-chassis {
+    padding: 1rem 0.85rem;
+  }
+  .porthole-outer-frame {
+    width: 320px;
+    height: 320px;
+  }
+  .digital-timer {
+    font-size: 2.2rem;
+  }
+  .timer-sublabel {
+    font-size: 0.55rem;
+  }
+  .stages-vertical-stack {
+    padding: 0.35rem 0.55rem;
+    gap: 0.15rem;
+  }
+  .stage-item {
+    font-size: 0.52rem;
+    letter-spacing: 1px;
+  }
+  .fascia-controls-row {
+    gap: 0.75rem;
+  }
+  .btn-fascia-start {
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+  }
+}
