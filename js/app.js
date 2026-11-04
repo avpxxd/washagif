@@ -30,15 +30,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // 3. Fun Laundromat Trivia & Tips
   const laundryMemeFacts = [
-    "💡 Tip: Never wash a rare Pepe in water above 40°C to preserve pixel borders.",
-    "🫧 Suds Report: 99.4% of crusty Reddit compression artifacts are now dissolved.",
-    "🧦 Missing Sock Alert: One white gym sock was detected in the digital lint filter.",
-    "⚡ RPM Sensor: Spinning at high G-force to squeeze out every drop of moldy JPEG noise.",
-    "🧼 Laundromat Etiquette: Please do not leave your GIFs unattended for more than 48 hours.",
-    "✨ Chemical Analysis: Active enzyme bleachers are targeting 8-bit color quantization banding.",
-    "🌀 Zen Moment: Watching your meme spin in a circle is clinically proven to lower stress.",
-    "👕 Fabric Care: Recommended dry cycle: Tumble dry low or hang dry on a high-speed fiber cable.",
-    "🔬 Deep Clean: Removing 15 years of repost watermarks, Ifunny tags, and screenshot borders."
+    "Tip: Never wash a rare meme in water above 40°C to preserve pixel borders.",
+    "99.4% of crusty Reddit compression artifacts are now dissolved.",
+    "Missing Sock Alert: One white gym sock was found in the dryer's lint filter.",
+    "Laundromat Etiquette: Please do not leave your GIFs unattended for more than 48 hours.",
+    "Watching your meme spin in a circle is clinically proven to lower stress.",
+    "Recommended dry cycle: Tumble dry low or hang dry on a high-speed fiber cable.",
+    "Removing 15 years of repost watermarks, Ifunny tags, and bad screenshot borders."
   ];
   let factIndex = 0;
 
