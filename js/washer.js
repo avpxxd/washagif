@@ -47,6 +47,9 @@ class WasherMachine {
 
   setSpeed(multiplier) {
     this.speedMultiplier = multiplier;
+    if (this.audio && this.audio.spinAudio) {
+      try { this.audio.spinAudio.playbackRate = multiplier; } catch(e) {}
+    }
     if (this.onSpeedChange) this.onSpeedChange(multiplier);
   }
 
@@ -188,6 +191,15 @@ class WasherMachine {
       if (this.onStateChange) this.onStateChange(this.state);
     } else if (this.state === 'PAUSED') {
       this.state = 'RUNNING';
+      if (this.currentStage === 'SPIN' || this.currentStage === 'FINISHING') {
+        if (this.audio.resumeSpin) this.audio.resumeSpin();
+      } else if (this.currentStage === 'FILL') {
+        this.audio.startWaterFill();
+      } else if (this.currentStage === 'WASH') {
+        this.audio.startTumble(true);
+      } else if (this.currentStage === 'DRAIN') {
+        this.audio.startDrain();
+      }
       if (this.onStateChange) this.onStateChange(this.state);
     }
   }
@@ -195,7 +207,10 @@ class WasherMachine {
   pause() {
     if (this.state === 'RUNNING') {
       this.state = 'PAUSED';
-      this.audio.stopAll();
+      this.audio.stopWaterFill();
+      this.audio.stopTumble();
+      this.audio.stopDrain();
+      if (this.audio.pauseSpin) this.audio.pauseSpin();
       if (this.onStateChange) this.onStateChange(this.state);
     }
   }
@@ -306,11 +321,11 @@ class WasherMachine {
       targetAgitation = 0.1;
       this.setMachineShake('none');
     }
-    // STAGE 2: 15s - 60s (45s: Water & Detergent Fill)
-    else if (t < 60) {
+    // STAGE 2: 15s - 55s (40s: Water & Detergent Fill)
+    else if (t < 55) {
       stageKey = 'FILL';
       stageName = 'FILLING WATER & DETERGENT';
-      const fillProgress = (t - 15) / 45;
+      const fillProgress = (t - 15) / 40;
       targetWater = 0.45 * fillProgress;
       targetAgitation = 0.25;
       targetFoam = fillProgress * 0.4;
@@ -318,8 +333,8 @@ class WasherMachine {
       this.water.isFilling = true;
       this.setMachineShake('none');
     }
-    // STAGE 3: 60s - 180s (120s = 2.0 minutes: Gentle Rocking & Tumble Wash)
-    else if (t < 180) {
+    // STAGE 3: 55s - 175s (120s = 2.0 minutes: Gentle Rocking & Tumble Wash)
+    else if (t < 175) {
       stageKey = 'WASH';
       stageName = 'GENTLE ROCK & TUMBLE WASH';
       this.water.isFilling = false;
@@ -328,7 +343,7 @@ class WasherMachine {
       targetFoam = 0.8;
 
       // Rock back and forth every 7 seconds
-      const cycleTime = (t - 60) % 14;
+      const cycleTime = (t - 55) % 14;
       if (cycleTime < 6) {
         this.targetRPM = 42; // Clockwise
       } else if (cycleTime < 7) {
@@ -340,29 +355,29 @@ class WasherMachine {
       }
 
       // Grime reduction over tumble wash: 1.0 -> 0.2
-      const washProgress = (t - 60) / (180 - 60);
+      const washProgress = (t - 55) / (175 - 55);
       this.setGrimeLevel(1.0 - (washProgress * 0.8));
       this.water.setClarity(0.2 + washProgress * 0.3);
       this.setMachineShake('gentle');
     }
-    // STAGE 4: 180s - 220s (40s: Drain Murky Water)
-    else if (t < 220) {
+    // STAGE 4: 175s - 210s (35s: Drain Murky Water)
+    else if (t < 210) {
       stageKey = 'DRAIN';
       stageName = 'DRAINING DIRTY WATER';
-      const drainProgress = (t - 180) / 40;
+      const drainProgress = (t - 175) / 35;
       targetWater = 0.45 * (1 - drainProgress);
       targetAgitation = 0.2;
       targetFoam = 0.6 * (1 - drainProgress * 0.7);
       this.targetRPM = 20;
       this.setMachineShake('none');
     }
-    // STAGE 5: 220s - 245s (25s: Clean Spray Rinse & Pre-Spin Drain)
-    else if (t < 245) {
+    // STAGE 5: 210s - 230s (20s: Clean Spray Rinse & Pre-Spin Drain)
+    else if (t < 230) {
       stageKey = 'RINSE';
       stageName = 'FRESH WATER JET RINSE';
 
-      if (t < 237) {
-        // Active jet spray rinse (220s - 237s)
+      if (t < 223) {
+        // Active jet spray rinse (210s - 223s)
         this.water.isFilling = true;
         targetWater = 0.15;
         targetAgitation = 0.5;
@@ -376,9 +391,9 @@ class WasherMachine {
           this.audio.startWaterFill();
         }
       } else {
-        // Pre-spin drain & pump out (237s - 245s)
+        // Pre-spin drain & pump out (223s - 230s)
         this.water.isFilling = false;
-        const drainProgress = (t - 237) / 8;
+        const drainProgress = (t - 223) / 7;
         targetWater = 0.15 * (1 - drainProgress);
         targetAgitation = 0.2 * (1 - drainProgress);
         targetFoam = 0.1 * (1 - drainProgress);
@@ -392,8 +407,9 @@ class WasherMachine {
       }
       this.setMachineShake('gentle');
     }
-    // STAGE 6: 245s - 285s (40s: High-Speed Centrifuge Spin)
-    else if (t < 285) {
+    // STAGE 6: 230s - 280s (50s: Authentic Spin Cycle using spin cycle.mp3)
+    // In MP3: Starts at 0s, starts speeding up at 2s, hits 1400 RPM
+    else if (t < 280) {
       stageKey = 'SPIN';
       stageName = 'HIGH-SPEED SPIN (1400 RPM)';
       this.water.isFilling = false;
@@ -401,54 +417,56 @@ class WasherMachine {
       targetAgitation = 0;
       this.water.setFoam(0);
 
-      // Spin acceleration curve up to 1400 RPM
-      const spinDuration = 285 - 245; // 40s
-      const spinProgress = (t - 245) / spinDuration;
-
-      // Drain pump running during initial extraction (first 20% = 8s)
-      if (spinProgress < 0.2) {
-        if (!this.spinDrainActive) {
-          this.spinDrainActive = true;
-          this.audio.startDrain();
-        }
-      } else {
-        if (this.spinDrainActive) {
-          this.spinDrainActive = false;
-          this.audio.stopDrain();
-        }
+      // Keep spin audio playback position synchronized
+      if (this.audio.syncSpinTime) {
+        this.audio.syncSpinTime(t - 230);
       }
 
       let currentSpinTarget = 0;
-      if (spinProgress < 0.2) {
-        // Balance distribution phase
-        currentSpinTarget = 150 + (spinProgress / 0.2) * 250; // 150 -> 400
+      if (t < 232) {
+        // Initial 2 seconds in MP3: balancing rotation before speed up
+        currentSpinTarget = 55;
         this.setMachineShake('gentle');
-      } else if (spinProgress < 0.8) {
-        // Maximum extraction phase (up to 1400 RPM)
-        currentSpinTarget = 400 + Math.pow((spinProgress - 0.2) / 0.6, 1.4) * 1000;
-        this.setMachineShake('violent');
       } else {
-        // High speed hold & initial brake
-        currentSpinTarget = 1400 * (1 - (spinProgress - 0.8) / 0.2 * 0.4);
-        this.setMachineShake('violent');
+        // 2s to 50s in MP3 (t = 232s to 280s): "starts speeding up at 2s"
+        const speedProgress = (t - 232) / (280 - 232); // 0.0 to 1.0 (48s)
+        if (speedProgress < 0.25) {
+          // Accelerating 55 -> 450 RPM
+          currentSpinTarget = 55 + (speedProgress / 0.25) * 395;
+          this.setMachineShake('gentle');
+        } else if (speedProgress < 0.75) {
+          // Powerful centrifuge ramp 450 -> 1400 RPM
+          currentSpinTarget = 450 + Math.pow((speedProgress - 0.25) / 0.5, 1.2) * 950;
+          this.setMachineShake('violent');
+        } else {
+          // Full maximum power extraction hold at 1400 RPM
+          currentSpinTarget = 1400;
+          this.setMachineShake('violent');
+        }
       }
 
       this.targetRPM = currentSpinTarget;
       targetSpin = Math.min(1, currentSpinTarget / 1400);
 
-      this.audio.updateSpinRPM(this.drumRPM);
-
-      // Remove all remaining grime during centrifuge
-      this.setGrimeLevel(Math.max(0, 0.2 * (1 - spinProgress * 1.5)));
+      // Grime reduction over high speed spin
+      const spinGrimeProgress = Math.max(0, (t - 232) / (280 - 232));
+      this.setGrimeLevel(Math.max(0, 0.2 * (1 - spinGrimeProgress * 1.5)));
     }
-    // STAGE 7: 285s - 300s (15s: Deceleration & Fluff)
+    // STAGE 7: 280s - 300s (20s: Deceleration & Fluff)
+    // In MP3: "starts to slow at 50s" (t = 280s is 50s in MP3!)
     else {
       stageKey = 'FINISHING';
       stageName = 'DECELERATING & FLUFFING';
-      const decelProgress = (t - 285) / 15;
-      this.targetRPM = 400 * (1 - decelProgress);
+
+      // Keep spin audio playback position synchronized
+      if (this.audio.syncSpinTime) {
+        this.audio.syncSpinTime(t - 230);
+      }
+
+      const decelProgress = (t - 280) / 20; // 0.0 to 1.0 (20s)
+      this.targetRPM = 1400 * Math.pow(Math.max(0, 1 - decelProgress), 2.0);
       targetSpin = (1 - decelProgress) * 0.2;
-      this.setMachineShake('gentle');
+      this.setMachineShake(decelProgress > 0.6 ? 'none' : 'gentle');
       this.setGrimeLevel(0);
     }
 
@@ -471,11 +489,11 @@ class WasherMachine {
         this.preSpinDraining = false;
       } else if (stageKey === 'SPIN') {
         this.audio.stopWaterFill();
-        this.audio.startSpin(1400);
+        this.audio.stopDrain();
+        this.audio.startSpin(0);
         this.spinDrainActive = false;
       } else if (stageKey === 'FINISHING') {
-        this.audio.stopSpin();
-        this.audio.stopDrain();
+        // MP3 naturally plays the deceleration that starts at 50s
       }
     }
 

@@ -17,8 +17,12 @@ class WasherAudio {
     this.fillNode = null;
     this.tumbleNode = null;
     this.drainNode = null;
-    this.spinNode = null;
     this.sloshInterval = null;
+
+    // Authentic Spin Cycle Audio (Recorded washing machine MP3)
+    this.spinAudio = new Audio('spin-cycle.mp3');
+    this.spinAudio.preload = 'auto';
+    this.spinAudio.loop = false;
   }
 
   init() {
@@ -61,6 +65,9 @@ class WasherAudio {
       this.masterGain.gain.cancelScheduledValues(t);
       this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t);
       this.masterGain.gain.linearRampToValueAtTime(this.isMuted ? 0 : 0.45, t + 0.05);
+    }
+    if (this.spinAudio) {
+      this.spinAudio.volume = this.isMuted ? 0 : 0.75;
     }
     return this.isMuted;
   }
@@ -456,126 +463,60 @@ class WasherAudio {
     }
   }
 
-  // High-Speed Spin Turbine
-  startSpin(targetRPM = 1400) {
-    if (this.spinNode) return; // Already running
+  // Authentic Spin Cycle Playback using spin cycle.mp3
+  // Starts speeding up at 2s, and starts to slow down at 50s!
+  startSpin(offset = 0) {
     this.init(); this.resume();
-    if (!this.ctx) return;
-
-    const now = this.ctx.currentTime;
-    // Turbine pitch sweeps up with RPM
-    const turbineOsc = this.ctx.createOscillator();
-    turbineOsc.type = 'sawtooth';
-    turbineOsc.frequency.setValueAtTime(80, now);
-
-    const turbineFilter = this.ctx.createBiquadFilter();
-    turbineFilter.type = 'lowpass';
-    turbineFilter.frequency.setValueAtTime(380, now);
-
-    const turbineGain = this.ctx.createGain();
-    turbineGain.gain.setValueAtTime(0.0001, now);
-    turbineGain.gain.linearRampToValueAtTime(0.16, now + 2.5);
-
-    turbineOsc.connect(turbineFilter);
-    turbineFilter.connect(turbineGain);
-    turbineGain.connect(this.masterGain);
-
-    // Deep sub-bass vibration thumping
-    const subOsc = this.ctx.createOscillator();
-    subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(38, now);
-
-    const subGain = this.ctx.createGain();
-    subGain.gain.setValueAtTime(0.0001, now);
-    subGain.gain.linearRampToValueAtTime(0.18, now + 2.0);
-
-    subOsc.connect(subGain);
-    subGain.connect(this.masterGain);
-
-    // High velocity air rush
-    const airNoise = this.ctx.createBufferSource();
-    airNoise.buffer = this.noiseBuffer5s || this.createNoiseBuffer(5);
-    airNoise.loop = true;
-
-    const airFilter = this.ctx.createBiquadFilter();
-    airFilter.type = 'bandpass';
-    airFilter.frequency.setValueAtTime(1200, now);
-    airFilter.Q.setValueAtTime(1.2, now);
-
-    const airGain = this.ctx.createGain();
-    airGain.gain.setValueAtTime(0.0001, now);
-    airGain.gain.linearRampToValueAtTime(0.12, now + 2.5);
-
-    airNoise.connect(airFilter);
-    airFilter.connect(airGain);
-    airGain.connect(this.masterGain);
-
-    turbineOsc.start(now);
-    subOsc.start(now);
-    airNoise.start(now);
-
-    this.spinNode = { turbineOsc, turbineFilter, turbineGain, subOsc, subGain, airNoise, airFilter, airGain };
+    if (this.spinAudio) {
+      this.spinAudio.volume = this.isMuted ? 0 : 0.75;
+      if (typeof offset === 'number' && offset >= 0) {
+        try {
+          this.spinAudio.currentTime = offset;
+        } catch(e) {}
+      }
+      const playPromise = this.spinAudio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(e => {
+          // Handled gracefully if browser requires user interaction first
+        });
+      }
+    }
   }
 
-  // Dynamically update spin frequency based on current RPM (0 to 1400)
+  // Keep spin audio playback position synchronized with the washer cycle
+  syncSpinTime(elapsedInSpin) {
+    if (!this.spinAudio) return;
+    if (this.spinAudio.paused) return;
+    if (Math.abs(this.spinAudio.currentTime - elapsedInSpin) > 1.2) {
+      try {
+        this.spinAudio.currentTime = Math.max(0, Math.min(this.spinAudio.duration || 71.4, elapsedInSpin));
+      } catch(e) {}
+    }
+  }
+
+  pauseSpin() {
+    if (this.spinAudio) {
+      try { this.spinAudio.pause(); } catch(e) {}
+    }
+  }
+
+  resumeSpin() {
+    if (this.spinAudio && !this.isMuted) {
+      const playPromise = this.spinAudio.play();
+      if (playPromise !== undefined) playPromise.catch(() => {});
+    }
+  }
+
   updateSpinRPM(rpm) {
-    if (!this.spinNode || !this.ctx) return;
-    const clampedRpm = Math.max(50, Math.min(1400, rpm));
-    const targetFreq = 75 + (clampedRpm / 1400) * 540; // 75Hz -> 615Hz
-    const targetFilter = 300 + (clampedRpm / 1400) * 1400;
-
-    const t = this.ctx.currentTime;
-    try {
-      this.spinNode.turbineOsc.frequency.cancelScheduledValues(t);
-      this.spinNode.turbineOsc.frequency.setValueAtTime(this.spinNode.turbineOsc.frequency.value, t);
-      this.spinNode.turbineOsc.frequency.linearRampToValueAtTime(targetFreq, t + 0.1);
-
-      this.spinNode.turbineFilter.frequency.cancelScheduledValues(t);
-      this.spinNode.turbineFilter.frequency.setValueAtTime(this.spinNode.turbineFilter.frequency.value, t);
-      this.spinNode.turbineFilter.frequency.linearRampToValueAtTime(targetFilter, t + 0.1);
-    } catch(e) {}
+    // RPM acoustics are perfectly captured inside the authentic MP3 recording
   }
 
   stopSpin() {
-    if (!this.spinNode || !this.ctx) return;
-    const node = this.spinNode;
-    this.spinNode = null; // Mark stopped immediately
-
-    try {
-      const now = this.ctx.currentTime;
-      node.turbineGain.gain.cancelScheduledValues(now);
-      node.turbineGain.gain.setValueAtTime(node.turbineGain.gain.value, now);
-      node.turbineGain.gain.linearRampToValueAtTime(0.0001, now + 1.2);
-
-      node.subGain.gain.cancelScheduledValues(now);
-      node.subGain.gain.setValueAtTime(node.subGain.gain.value, now);
-      node.subGain.gain.linearRampToValueAtTime(0.0001, now + 1.2);
-
-      node.airGain.gain.cancelScheduledValues(now);
-      node.airGain.gain.setValueAtTime(node.airGain.gain.value, now);
-      node.airGain.gain.linearRampToValueAtTime(0.0001, now + 1.2);
-
-      setTimeout(() => {
-        try {
-          node.turbineOsc.stop();
-          node.subOsc.stop();
-          node.airNoise.stop();
-          node.turbineOsc.disconnect();
-          node.turbineFilter.disconnect();
-          node.turbineGain.disconnect();
-          node.subOsc.disconnect();
-          node.subGain.disconnect();
-          node.airNoise.disconnect();
-          node.airFilter.disconnect();
-          node.airGain.disconnect();
-        } catch(e) {}
-      }, 1300);
-    } catch(e) {
+    if (this.spinAudio) {
       try {
-        node.turbineOsc.stop();
-        node.subOsc.stop();
-        node.airNoise.stop();
-      } catch(err) {}
+        this.spinAudio.pause();
+        this.spinAudio.currentTime = 0;
+      } catch(e) {}
     }
   }
 

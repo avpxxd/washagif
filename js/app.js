@@ -286,8 +286,8 @@ document.addEventListener('DOMContentLoaded', () => {
     else if (s.includes('FILL')) activeKey = 'fill';
     else if (s.includes('WASH') || s.includes('DRAIN')) activeKey = 'wash';
     else if (s.includes('RINSE')) activeKey = 'rinse';
-    else if (s.includes('SPIN')) activeKey = 'spin';
-    else if (s.includes('DONE') || s.includes('FINISH')) activeKey = 'done';
+    else if (s.includes('SPIN') || s.includes('FINISH')) activeKey = 'spin';
+    else if (s.includes('DONE')) activeKey = 'done';
 
     ['sense', 'fill', 'wash', 'rinse', 'spin', 'done'].forEach(key => {
       const el = document.getElementById(`stage-${key}`);
