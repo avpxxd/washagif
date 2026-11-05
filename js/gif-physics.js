@@ -533,7 +533,7 @@ class GifPhysics {
 
   triggerLaundryThud(impactSpeed) {
     const now = performance.now();
-    if (now - this.lastThudTime < 130) return;
+    if (now - this.lastThudTime < 160) return;
     this.lastThudTime = now;
 
     if (this.washer && this.washer.audio) {

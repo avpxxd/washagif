@@ -1,13 +1,19 @@
 // Web Audio Procedural Sound Synthesizer for WashaGif
 // Generates authentic washing machine acoustics with zero external audio assets!
+// Fully stabilized, click-free, with master limiter and idempotent sound nodes.
 
 class WasherAudio {
   constructor() {
     this.ctx = null;
     this.isMuted = false;
     this.masterGain = null;
-    
-    // Active sound nodes
+    this.compressor = null;
+
+    // Pre-allocated reusable noise buffers
+    this.noiseBuffer1s = null;
+    this.noiseBuffer5s = null;
+
+    // Active continuous sound nodes
     this.fillNode = null;
     this.tumbleNode = null;
     this.drainNode = null;
@@ -19,11 +25,27 @@ class WasherAudio {
     if (this.ctx) return;
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     if (!AudioContextClass) return;
-    
+
     this.ctx = new AudioContextClass();
+
+    // Master Dynamics Compressor (Brickwall Limiter)
+    // Prevents clipping, harsh digital distortion, and distortion pops
+    this.compressor = this.ctx.createDynamicsCompressor();
+    this.compressor.threshold.setValueAtTime(-6, this.ctx.currentTime);
+    this.compressor.knee.setValueAtTime(6, this.ctx.currentTime);
+    this.compressor.ratio.setValueAtTime(12, this.ctx.currentTime);
+    this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
+    this.compressor.release.setValueAtTime(0.12, this.ctx.currentTime);
+
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.6, this.ctx.currentTime);
-    this.masterGain.connect(this.ctx.destination);
+    this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.45, this.ctx.currentTime);
+
+    this.masterGain.connect(this.compressor);
+    this.compressor.connect(this.ctx.destination);
+
+    // Pre-allocate shared noise buffers once to eliminate runtime garbage collection
+    this.noiseBuffer1s = this.createNoiseBuffer(1.0);
+    this.noiseBuffer5s = this.createNoiseBuffer(5.0);
   }
 
   resume() {
@@ -35,15 +57,18 @@ class WasherAudio {
   toggleMute() {
     this.isMuted = !this.isMuted;
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.6, this.ctx.currentTime);
+      const t = this.ctx.currentTime;
+      this.masterGain.gain.cancelScheduledValues(t);
+      this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, t);
+      this.masterGain.gain.linearRampToValueAtTime(this.isMuted ? 0 : 0.45, t + 0.05);
     }
     return this.isMuted;
   }
 
-  // Helper: create white noise buffer
+  // Create white noise buffer
   createNoiseBuffer(seconds = 3) {
     if (!this.ctx) return null;
-    const bufferSize = this.ctx.sampleRate * seconds;
+    const bufferSize = Math.floor(this.ctx.sampleRate * seconds);
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const output = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -57,19 +82,24 @@ class WasherAudio {
     this.init(); this.resume();
     if (!this.ctx || this.isMuted) return;
 
+    const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(1400, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + 0.02);
+    osc.frequency.setValueAtTime(1400, now);
+    osc.frequency.exponentialRampToValueAtTime(120, now + 0.02);
 
-    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.02);
+    gain.gain.setValueAtTime(0.22, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.03);
+    osc.start(now);
+    osc.stop(now + 0.025);
+
+    setTimeout(() => {
+      try { osc.disconnect(); gain.disconnect(); } catch(e) {}
+    }, 40);
   }
 
   // Authentic Wet Clothes / Laundry Flop Sound when falling to drum bottom
@@ -78,42 +108,51 @@ class WasherAudio {
     if (!this.ctx || this.isMuted) return;
 
     const now = this.ctx.currentTime;
-    const intensity = Math.min(1.0, Math.max(0.18, impactSpeed / 450));
+    const intensity = Math.min(1.0, Math.max(0.15, impactSpeed / 450));
 
-    // 1. Deep laundry impact thud
+    // 1. Deep laundry impact thud (sine punch)
     const subOsc = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
     subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(75, now);
-    subOsc.frequency.exponentialRampToValueAtTime(26, now + 0.12);
+    subOsc.frequency.setValueAtTime(68, now);
+    subOsc.frequency.exponentialRampToValueAtTime(24, now + 0.1);
 
-    subGain.gain.setValueAtTime(0.32 * intensity, now);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    subGain.gain.setValueAtTime(0.26 * intensity, now);
+    subGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
 
     subOsc.connect(subGain);
     subGain.connect(this.masterGain);
-
     subOsc.start(now);
-    subOsc.stop(now + 0.14);
+    subOsc.stop(now + 0.12);
 
     // 2. Soft muffled wet cloth impact noise burst
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = this.createNoiseBuffer(0.12);
+    const noiseBuf = this.noiseBuffer1s || this.createNoiseBuffer(0.5);
+    if (noiseBuf) {
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = noiseBuf;
 
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(240, now);
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(200, now);
 
-    const noiseGain = this.ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.24 * intensity, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.18 * intensity, now);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
 
-    noise.connect(filter);
-    filter.connect(noiseGain);
-    noiseGain.connect(this.masterGain);
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(this.masterGain);
 
-    noise.start(now);
-    noise.stop(now + 0.1);
+      noise.start(now);
+      noise.stop(now + 0.09);
+
+      setTimeout(() => {
+        try {
+          subOsc.disconnect(); subGain.disconnect();
+          noise.disconnect(); filter.disconnect(); noiseGain.disconnect();
+        } catch(e) {}
+      }, 150);
+    }
   }
 
   // Button Press Beep
@@ -121,18 +160,23 @@ class WasherAudio {
     this.init(); this.resume();
     if (!this.ctx || this.isMuted) return;
 
+    const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = type;
-    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+    osc.frequency.setValueAtTime(freq, now);
 
-    gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.08);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.09);
+    osc.start(now);
+    osc.stop(now + 0.085);
+
+    setTimeout(() => {
+      try { osc.disconnect(); gain.disconnect(); } catch(e) {}
+    }, 110);
   }
 
   // Heavy Solenoid Door Lock ("CLACK-CLACK")
@@ -141,11 +185,8 @@ class WasherAudio {
     if (!this.ctx || this.isMuted) return;
 
     const now = this.ctx.currentTime;
-    
-    // First strike
-    this._playLockStrike(now, locked ? 240 : 180, 0.4);
-    // Second secondary rebound click
-    this._playLockStrike(now + 0.06, locked ? 160 : 220, 0.3);
+    this._playLockStrike(now, locked ? 220 : 170, 0.35);
+    this._playLockStrike(now + 0.06, locked ? 150 : 200, 0.25);
   }
 
   _playLockStrike(time, baseFreq, vol) {
@@ -156,22 +197,26 @@ class WasherAudio {
     osc.frequency.exponentialRampToValueAtTime(30, time + 0.04);
 
     gain.gain.setValueAtTime(vol, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.048);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
     osc.start(time);
-    osc.stop(time + 0.06);
+    osc.stop(time + 0.05);
+
+    setTimeout(() => {
+      try { osc.disconnect(); gain.disconnect(); } catch(e) {}
+    }, 80);
   }
 
   // Water Inflow Hiss / Rush
   startWaterFill() {
-    this.stopWaterFill();
+    if (this.fillNode) return; // Already running
     this.init(); this.resume();
     if (!this.ctx) return;
 
     const noise = this.ctx.createBufferSource();
-    noise.buffer = this.createNoiseBuffer(5);
+    noise.buffer = this.noiseBuffer5s || this.createNoiseBuffer(5);
     noise.loop = true;
 
     // Filter to simulate rushing water pipe
@@ -181,93 +226,113 @@ class WasherAudio {
     filter.Q.setValueAtTime(1.8, this.ctx.currentTime);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.001, this.ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.28, this.ctx.currentTime + 1.2);
-
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.masterGain);
-
-    noise.start();
-    this.fillNode = { noise, gain, filter };
-  }
-
-  stopWaterFill() {
-    if (this.fillNode && this.ctx) {
-      try {
-        this.fillNode.gain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
-        setTimeout(() => {
-          try { this.fillNode.noise.stop(); } catch(e) {}
-          this.fillNode = null;
-        }, 600);
-      } catch (e) {
-        this.fillNode = null;
-      }
-    }
-  }
-
-  // Tumble Motor Hum & Water Sloshes
-  startTumble(isGentle = true) {
-    this.stopTumble();
-    this.init(); this.resume();
-    if (!this.ctx) return;
-
-    // Motor low hum
-    const motorOsc = this.ctx.createOscillator();
-    const motorGain = this.ctx.createGain();
-    motorOsc.type = 'sine';
-    motorOsc.frequency.setValueAtTime(55, this.ctx.currentTime);
-
-    // Motor electrical whine
-    const whineOsc = this.ctx.createOscillator();
-    const whineGain = this.ctx.createGain();
-    whineOsc.type = 'triangle';
-    whineOsc.frequency.setValueAtTime(120, this.ctx.currentTime);
-
-    motorGain.gain.setValueAtTime(0.18, this.ctx.currentTime);
-    whineGain.gain.setValueAtTime(0.04, this.ctx.currentTime);
-
-    motorOsc.connect(motorGain);
-    whineOsc.connect(whineGain);
-    motorGain.connect(this.masterGain);
-    whineGain.connect(this.masterGain);
-
-    motorOsc.start();
-    whineOsc.start();
-
-    this.tumbleNode = { motorOsc, whineOsc, motorGain, whineGain };
-
-    // Periodic slosh sound
-    this.sloshInterval = setInterval(() => {
-      if (Math.random() > 0.3) {
-        this.playSlosh();
-      }
-    }, 2800);
-  }
-
-  playSlosh() {
-    if (!this.ctx || this.isMuted) return;
     const now = this.ctx.currentTime;
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = this.createNoiseBuffer(1.2);
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(400, now);
-    filter.frequency.linearRampToValueAtTime(1100, now + 0.4);
-    filter.frequency.exponentialRampToValueAtTime(250, now + 1.1);
-
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.01, now);
-    gain.gain.linearRampToValueAtTime(0.22, now + 0.25);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.22, now + 0.7);
 
     noise.connect(filter);
     filter.connect(gain);
     gain.connect(this.masterGain);
 
     noise.start(now);
-    noise.stop(now + 1.2);
+    this.fillNode = { noise, gain, filter };
+  }
+
+  stopWaterFill() {
+    if (!this.fillNode || !this.ctx) return;
+    const node = this.fillNode;
+    this.fillNode = null; // Mark stopped immediately
+
+    try {
+      const now = this.ctx.currentTime;
+      node.gain.gain.cancelScheduledValues(now);
+      node.gain.gain.setValueAtTime(node.gain.gain.value, now);
+      node.gain.gain.linearRampToValueAtTime(0.0001, now + 0.3);
+      setTimeout(() => {
+        try {
+          node.noise.stop();
+          node.noise.disconnect();
+          node.filter.disconnect();
+          node.gain.disconnect();
+        } catch(e) {}
+      }, 350);
+    } catch (e) {
+      try { node.noise.stop(); node.noise.disconnect(); } catch(err) {}
+    }
+  }
+
+  // Tumble Motor Hum & Water Sloshes
+  startTumble(isGentle = true) {
+    if (this.tumbleNode) return; // Already running
+    this.init(); this.resume();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+    // Motor low hum
+    const motorOsc = this.ctx.createOscillator();
+    const motorGain = this.ctx.createGain();
+    motorOsc.type = 'sine';
+    motorOsc.frequency.setValueAtTime(55, now);
+
+    // Motor electrical whine
+    const whineOsc = this.ctx.createOscillator();
+    const whineGain = this.ctx.createGain();
+    whineOsc.type = 'triangle';
+    whineOsc.frequency.setValueAtTime(120, now);
+
+    motorGain.gain.setValueAtTime(0.0001, now);
+    motorGain.gain.linearRampToValueAtTime(0.13, now + 0.3);
+    whineGain.gain.setValueAtTime(0.0001, now);
+    whineGain.gain.linearRampToValueAtTime(0.028, now + 0.3);
+
+    motorOsc.connect(motorGain);
+    whineOsc.connect(whineGain);
+    motorGain.connect(this.masterGain);
+    whineGain.connect(this.masterGain);
+
+    motorOsc.start(now);
+    whineOsc.start(now);
+
+    this.tumbleNode = { motorOsc, whineOsc, motorGain, whineGain };
+
+    // Periodic slosh sound
+    if (this.sloshInterval) clearInterval(this.sloshInterval);
+    this.sloshInterval = setInterval(() => {
+      if (Math.random() > 0.35) {
+        this.playSlosh();
+      }
+    }, 3200);
+  }
+
+  playSlosh() {
+    if (!this.ctx || this.isMuted) return;
+    const now = this.ctx.currentTime;
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = this.noiseBuffer5s || this.createNoiseBuffer(2);
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(320, now);
+    filter.frequency.linearRampToValueAtTime(900, now + 0.35);
+    filter.frequency.exponentialRampToValueAtTime(200, now + 0.95);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.16, now + 0.2);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+
+    noise.start(now);
+    noise.stop(now + 1.0);
+
+    setTimeout(() => {
+      try {
+        noise.disconnect(); filter.disconnect(); gain.disconnect();
+      } catch(e) {}
+    }, 1100);
   }
 
   stopTumble() {
@@ -275,105 +340,141 @@ class WasherAudio {
       clearInterval(this.sloshInterval);
       this.sloshInterval = null;
     }
-    if (this.tumbleNode && this.ctx) {
+    if (!this.tumbleNode || !this.ctx) return;
+    const node = this.tumbleNode;
+    this.tumbleNode = null; // Mark stopped immediately
+
+    try {
+      const now = this.ctx.currentTime;
+      node.motorGain.gain.cancelScheduledValues(now);
+      node.motorGain.gain.setValueAtTime(node.motorGain.gain.value, now);
+      node.motorGain.gain.linearRampToValueAtTime(0.0001, now + 0.25);
+
+      node.whineGain.gain.cancelScheduledValues(now);
+      node.whineGain.gain.setValueAtTime(node.whineGain.gain.value, now);
+      node.whineGain.gain.linearRampToValueAtTime(0.0001, now + 0.25);
+
+      setTimeout(() => {
+        try {
+          node.motorOsc.stop();
+          node.whineOsc.stop();
+          node.motorOsc.disconnect();
+          node.whineOsc.disconnect();
+          node.motorGain.disconnect();
+          node.whineGain.disconnect();
+        } catch(e) {}
+      }, 300);
+    } catch(e) {
       try {
-        this.tumbleNode.motorGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
-        this.tumbleNode.whineGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
-        setTimeout(() => {
-          try {
-            this.tumbleNode.motorOsc.stop();
-            this.tumbleNode.whineOsc.stop();
-          } catch(e) {}
-          this.tumbleNode = null;
-        }, 350);
-      } catch(e) {
-        this.tumbleNode = null;
-      }
+        node.motorOsc.stop();
+        node.whineOsc.stop();
+      } catch(err) {}
     }
   }
 
   // Drain Impeller Pump & Gurgle
   startDrain() {
-    this.stopDrain();
+    if (this.drainNode) return; // Already running
     this.init(); this.resume();
     if (!this.ctx) return;
 
+    const now = this.ctx.currentTime;
     // 60Hz buzzing pump
     const pumpOsc = this.ctx.createOscillator();
     pumpOsc.type = 'sawtooth';
-    pumpOsc.frequency.setValueAtTime(60, this.ctx.currentTime);
+    pumpOsc.frequency.setValueAtTime(60, now);
 
     const pumpFilter = this.ctx.createBiquadFilter();
     pumpFilter.type = 'lowpass';
-    pumpFilter.frequency.setValueAtTime(320, this.ctx.currentTime);
+    pumpFilter.frequency.setValueAtTime(260, now);
 
     const pumpGain = this.ctx.createGain();
-    pumpGain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+    pumpGain.gain.setValueAtTime(0.0001, now);
+    pumpGain.gain.linearRampToValueAtTime(0.08, now + 0.2);
 
     pumpOsc.connect(pumpFilter);
     pumpFilter.connect(pumpGain);
     pumpGain.connect(this.masterGain);
 
-    pumpOsc.start();
+    pumpOsc.start(now);
 
     // Gurgle noise
     const noise = this.ctx.createBufferSource();
-    noise.buffer = this.createNoiseBuffer(4);
+    noise.buffer = this.noiseBuffer5s || this.createNoiseBuffer(4);
     noise.loop = true;
 
     const noiseFilter = this.ctx.createBiquadFilter();
     noiseFilter.type = 'bandpass';
-    noiseFilter.frequency.setValueAtTime(500, this.ctx.currentTime);
-    noiseFilter.Q.setValueAtTime(3, this.ctx.currentTime);
+    noiseFilter.frequency.setValueAtTime(450, now);
+    noiseFilter.Q.setValueAtTime(2.5, now);
 
     const noiseGain = this.ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.14, this.ctx.currentTime);
+    noiseGain.gain.setValueAtTime(0.0001, now);
+    noiseGain.gain.linearRampToValueAtTime(0.09, now + 0.2);
 
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseGain);
     noiseGain.connect(this.masterGain);
 
-    noise.start();
+    noise.start(now);
 
-    this.drainNode = { pumpOsc, pumpGain, noise, noiseGain };
+    this.drainNode = { pumpOsc, pumpFilter, pumpGain, noise, noiseFilter, noiseGain };
   }
 
   stopDrain() {
-    if (this.drainNode && this.ctx) {
+    if (!this.drainNode || !this.ctx) return;
+    const node = this.drainNode;
+    this.drainNode = null; // Mark stopped immediately
+
+    try {
+      const now = this.ctx.currentTime;
+      node.pumpGain.gain.cancelScheduledValues(now);
+      node.pumpGain.gain.setValueAtTime(node.pumpGain.gain.value, now);
+      node.pumpGain.gain.linearRampToValueAtTime(0.0001, now + 0.25);
+
+      node.noiseGain.gain.cancelScheduledValues(now);
+      node.noiseGain.gain.setValueAtTime(node.noiseGain.gain.value, now);
+      node.noiseGain.gain.linearRampToValueAtTime(0.0001, now + 0.25);
+
+      setTimeout(() => {
+        try {
+          node.pumpOsc.stop();
+          node.noise.stop();
+          node.pumpOsc.disconnect();
+          node.pumpFilter.disconnect();
+          node.pumpGain.disconnect();
+          node.noise.disconnect();
+          node.noiseFilter.disconnect();
+          node.noiseGain.disconnect();
+        } catch(e) {}
+      }, 300);
+    } catch(e) {
       try {
-        this.drainNode.pumpGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
-        this.drainNode.noiseGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
-        setTimeout(() => {
-          try {
-            this.drainNode.pumpOsc.stop();
-            this.drainNode.noise.stop();
-          } catch(e) {}
-          this.drainNode = null;
-        }, 350);
-      } catch(e) {
-        this.drainNode = null;
-      }
+        node.pumpOsc.stop();
+        node.noise.stop();
+      } catch(err) {}
     }
   }
 
   // High-Speed Spin Turbine
   startSpin(targetRPM = 1400) {
-    this.stopSpin();
+    if (this.spinNode) return; // Already running
     this.init(); this.resume();
     if (!this.ctx) return;
 
+    const now = this.ctx.currentTime;
     // Turbine pitch sweeps up with RPM
     const turbineOsc = this.ctx.createOscillator();
     turbineOsc.type = 'sawtooth';
-    turbineOsc.frequency.setValueAtTime(90, this.ctx.currentTime);
+    turbineOsc.frequency.setValueAtTime(80, now);
 
     const turbineFilter = this.ctx.createBiquadFilter();
     turbineFilter.type = 'lowpass';
-    turbineFilter.frequency.setValueAtTime(450, this.ctx.currentTime);
+    turbineFilter.frequency.setValueAtTime(380, now);
 
     const turbineGain = this.ctx.createGain();
-    turbineGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
-    turbineGain.gain.linearRampToValueAtTime(0.24, this.ctx.currentTime + 4);
+    turbineGain.gain.setValueAtTime(0.0001, now);
+    turbineGain.gain.linearRampToValueAtTime(0.16, now + 2.5);
 
     turbineOsc.connect(turbineFilter);
     turbineFilter.connect(turbineGain);
@@ -382,68 +483,99 @@ class WasherAudio {
     // Deep sub-bass vibration thumping
     const subOsc = this.ctx.createOscillator();
     subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(40, this.ctx.currentTime);
+    subOsc.frequency.setValueAtTime(38, now);
 
     const subGain = this.ctx.createGain();
-    subGain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+    subGain.gain.setValueAtTime(0.0001, now);
+    subGain.gain.linearRampToValueAtTime(0.18, now + 2.0);
 
     subOsc.connect(subGain);
     subGain.connect(this.masterGain);
 
     // High velocity air rush
     const airNoise = this.ctx.createBufferSource();
-    airNoise.buffer = this.createNoiseBuffer(5);
+    airNoise.buffer = this.noiseBuffer5s || this.createNoiseBuffer(5);
     airNoise.loop = true;
 
     const airFilter = this.ctx.createBiquadFilter();
     airFilter.type = 'bandpass';
-    airFilter.frequency.setValueAtTime(1400, this.ctx.currentTime);
-    airFilter.Q.setValueAtTime(1.2, this.ctx.currentTime);
+    airFilter.frequency.setValueAtTime(1200, now);
+    airFilter.Q.setValueAtTime(1.2, now);
 
     const airGain = this.ctx.createGain();
-    airGain.gain.setValueAtTime(0.01, this.ctx.currentTime);
-    airGain.gain.linearRampToValueAtTime(0.18, this.ctx.currentTime + 4);
+    airGain.gain.setValueAtTime(0.0001, now);
+    airGain.gain.linearRampToValueAtTime(0.12, now + 2.5);
 
     airNoise.connect(airFilter);
     airFilter.connect(airGain);
     airGain.connect(this.masterGain);
 
-    turbineOsc.start();
-    subOsc.start();
-    airNoise.start();
+    turbineOsc.start(now);
+    subOsc.start(now);
+    airNoise.start(now);
 
-    this.spinNode = { turbineOsc, turbineFilter, turbineGain, subOsc, subGain, airNoise, airGain };
+    this.spinNode = { turbineOsc, turbineFilter, turbineGain, subOsc, subGain, airNoise, airFilter, airGain };
   }
 
   // Dynamically update spin frequency based on current RPM (0 to 1400)
   updateSpinRPM(rpm) {
     if (!this.spinNode || !this.ctx) return;
     const clampedRpm = Math.max(50, Math.min(1400, rpm));
-    const targetFreq = 80 + (clampedRpm / 1400) * 580; // 80Hz -> 660Hz
-    const targetFilter = 350 + (clampedRpm / 1400) * 1600;
+    const targetFreq = 75 + (clampedRpm / 1400) * 540; // 75Hz -> 615Hz
+    const targetFilter = 300 + (clampedRpm / 1400) * 1400;
 
-    this.spinNode.turbineOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.2);
-    this.spinNode.turbineFilter.frequency.setTargetAtTime(targetFilter, this.ctx.currentTime, 0.2);
+    const t = this.ctx.currentTime;
+    try {
+      this.spinNode.turbineOsc.frequency.cancelScheduledValues(t);
+      this.spinNode.turbineOsc.frequency.setValueAtTime(this.spinNode.turbineOsc.frequency.value, t);
+      this.spinNode.turbineOsc.frequency.linearRampToValueAtTime(targetFreq, t + 0.1);
+
+      this.spinNode.turbineFilter.frequency.cancelScheduledValues(t);
+      this.spinNode.turbineFilter.frequency.setValueAtTime(this.spinNode.turbineFilter.frequency.value, t);
+      this.spinNode.turbineFilter.frequency.linearRampToValueAtTime(targetFilter, t + 0.1);
+    } catch(e) {}
   }
 
   stopSpin() {
-    if (this.spinNode && this.ctx) {
+    if (!this.spinNode || !this.ctx) return;
+    const node = this.spinNode;
+    this.spinNode = null; // Mark stopped immediately
+
+    try {
+      const now = this.ctx.currentTime;
+      node.turbineGain.gain.cancelScheduledValues(now);
+      node.turbineGain.gain.setValueAtTime(node.turbineGain.gain.value, now);
+      node.turbineGain.gain.linearRampToValueAtTime(0.0001, now + 1.2);
+
+      node.subGain.gain.cancelScheduledValues(now);
+      node.subGain.gain.setValueAtTime(node.subGain.gain.value, now);
+      node.subGain.gain.linearRampToValueAtTime(0.0001, now + 1.2);
+
+      node.airGain.gain.cancelScheduledValues(now);
+      node.airGain.gain.setValueAtTime(node.airGain.gain.value, now);
+      node.airGain.gain.linearRampToValueAtTime(0.0001, now + 1.2);
+
+      setTimeout(() => {
+        try {
+          node.turbineOsc.stop();
+          node.subOsc.stop();
+          node.airNoise.stop();
+          node.turbineOsc.disconnect();
+          node.turbineFilter.disconnect();
+          node.turbineGain.disconnect();
+          node.subOsc.disconnect();
+          node.subGain.disconnect();
+          node.airNoise.disconnect();
+          node.airFilter.disconnect();
+          node.airGain.disconnect();
+        } catch(e) {}
+      }, 1300);
+    } catch(e) {
       try {
-        const now = this.ctx.currentTime;
-        this.spinNode.turbineGain.gain.linearRampToValueAtTime(0.001, now + 1.5);
-        this.spinNode.subGain.gain.linearRampToValueAtTime(0.001, now + 1.5);
-        this.spinNode.airGain.gain.linearRampToValueAtTime(0.001, now + 1.5);
-        setTimeout(() => {
-          try {
-            this.spinNode.turbineOsc.stop();
-            this.spinNode.subOsc.stop();
-            this.spinNode.airNoise.stop();
-          } catch(e) {}
-          this.spinNode = null;
-        }, 1600);
-      } catch(e) {
-        this.spinNode = null;
-      }
+        node.turbineOsc.stop();
+        node.subOsc.stop();
+        node.airNoise.stop();
+      } catch(err) {}
     }
   }
 
@@ -461,13 +593,17 @@ class WasherAudio {
     osc.frequency.setValueAtTime(pitch, now);
     osc.frequency.exponentialRampToValueAtTime(pitch * 1.8, now + 0.04);
 
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
 
     osc.connect(gain);
     gain.connect(this.masterGain);
     osc.start(now);
-    osc.stop(now + 0.07);
+    osc.stop(now + 0.065);
+
+    setTimeout(() => {
+      try { osc.disconnect(); gain.disconnect(); } catch(e) {}
+    }, 80);
   }
 
   // Iconic Washing Machine End Melody (Samsung / LG style friendly chime!)
@@ -475,8 +611,6 @@ class WasherAudio {
     this.init(); this.resume();
     if (!this.ctx || this.isMuted) return;
 
-    // Classic cheerful washer melody notes (frequencies in Hz)
-    // C5, E5, G5, C6, G5, A5, G5, E5, D5, C5
     const notes = [
       { f: 523.25, d: 0.16 }, // C5
       { f: 659.25, d: 0.16 }, // E5
@@ -490,7 +624,7 @@ class WasherAudio {
       { f: 523.25, d: 0.50 }  // C5 (held)
     ];
 
-    let t = this.ctx.currentTime + 0.1;
+    let t = this.ctx.currentTime + 0.05;
     notes.forEach(note => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
@@ -498,16 +632,20 @@ class WasherAudio {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(note.f, t);
 
-      // Bell-like strike and decay
       gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(0.25, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + note.d);
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + note.d);
 
       osc.connect(gain);
       gain.connect(this.masterGain);
 
       osc.start(t);
-      osc.stop(t + note.d + 0.05);
+      osc.stop(t + note.d + 0.04);
+
+      const cleanupDelay = (t + note.d + 0.1 - this.ctx.currentTime) * 1000;
+      setTimeout(() => {
+        try { osc.disconnect(); gain.disconnect(); } catch(e) {}
+      }, Math.max(50, cleanupDelay));
 
       t += note.d + 0.04;
     });

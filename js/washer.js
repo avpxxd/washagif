@@ -36,6 +36,8 @@ class WasherMachine {
     this.isDoorOpen = true; // Door starts open on load/reload
     this.isDoorLocked = false;
     this.hasItemLoaded = false;
+    this.preSpinDraining = false;
+    this.spinDrainActive = false;
 
     // Animation frame loop
     this.lastTimestamp = performance.now();
@@ -205,6 +207,8 @@ class WasherMachine {
     this.drumRPM = 0;
     this.targetRPM = 0;
     this.drumAngle = 0;
+    this.preSpinDraining = false;
+    this.spinDrainActive = false;
     this.lockDoor(false);
     this.audio.stopAll();
 
@@ -312,11 +316,6 @@ class WasherMachine {
       targetFoam = fillProgress * 0.4;
       this.targetRPM = (Math.sin(t * 1.5) > 0.3) ? 30 : -30;
       this.water.isFilling = true;
-
-      // Audio trigger
-      if (this.currentStage !== 'FILL') {
-        this.audio.startWaterFill();
-      }
       this.setMachineShake('none');
     }
     // STAGE 3: 60s - 180s (120s = 2.0 minutes: Gentle Rocking & Tumble Wash)
@@ -324,8 +323,6 @@ class WasherMachine {
       stageKey = 'WASH';
       stageName = 'GENTLE ROCK & TUMBLE WASH';
       this.water.isFilling = false;
-      this.audio.stopWaterFill();
-
       targetWater = 0.45;
       targetAgitation = 0.75;
       targetFoam = 0.8;
@@ -342,11 +339,6 @@ class WasherMachine {
         this.targetRPM = 0; // Pause
       }
 
-      // Audio
-      if (this.currentStage !== 'WASH') {
-        this.audio.startTumble(true);
-      }
-
       // Grime reduction over tumble wash: 1.0 -> 0.2
       const washProgress = (t - 60) / (180 - 60);
       this.setGrimeLevel(1.0 - (washProgress * 0.8));
@@ -357,17 +349,11 @@ class WasherMachine {
     else if (t < 220) {
       stageKey = 'DRAIN';
       stageName = 'DRAINING DIRTY WATER';
-      this.audio.stopTumble();
-
       const drainProgress = (t - 180) / 40;
       targetWater = 0.45 * (1 - drainProgress);
       targetAgitation = 0.2;
       targetFoam = 0.6 * (1 - drainProgress * 0.7);
       this.targetRPM = 20;
-
-      if (this.currentStage !== 'DRAIN') {
-        this.audio.startDrain();
-      }
       this.setMachineShake('none');
     }
     // STAGE 5: 220s - 245s (25s: Clean Spray Rinse & Pre-Spin Drain)
@@ -377,7 +363,6 @@ class WasherMachine {
 
       if (t < 237) {
         // Active jet spray rinse (220s - 237s)
-        this.audio.stopDrain();
         this.water.isFilling = true;
         targetWater = 0.15;
         targetAgitation = 0.5;
@@ -385,21 +370,25 @@ class WasherMachine {
         this.water.setClarity(0.85);
         this.targetRPM = (Math.sin(t * 2) > 0) ? 55 : -55;
 
-        if (this.currentStage !== 'RINSE') {
+        if (this.preSpinDraining) {
+          this.preSpinDraining = false;
+          this.audio.stopDrain();
           this.audio.startWaterFill();
         }
       } else {
-        // Pre-spin drain & pump out (237s - 245s):
-        // Smoothly pumps out all rinse water BEFORE the high-speed centrifuge begins!
+        // Pre-spin drain & pump out (237s - 245s)
         this.water.isFilling = false;
-        this.audio.stopWaterFill();
-        this.audio.startDrain();
-
         const drainProgress = (t - 237) / 8;
         targetWater = 0.15 * (1 - drainProgress);
         targetAgitation = 0.2 * (1 - drainProgress);
         targetFoam = 0.1 * (1 - drainProgress);
         this.targetRPM = 35;
+
+        if (!this.preSpinDraining) {
+          this.preSpinDraining = true;
+          this.audio.stopWaterFill();
+          this.audio.startDrain();
+        }
       }
       this.setMachineShake('gentle');
     }
@@ -408,8 +397,6 @@ class WasherMachine {
       stageKey = 'SPIN';
       stageName = 'HIGH-SPEED SPIN (1400 RPM)';
       this.water.isFilling = false;
-      this.audio.stopWaterFill();
-
       targetWater = 0;
       targetAgitation = 0;
       this.water.setFoam(0);
@@ -418,11 +405,17 @@ class WasherMachine {
       const spinDuration = 285 - 245; // 40s
       const spinProgress = (t - 245) / spinDuration;
 
-      // Keep drain pump running during initial spin extraction
+      // Drain pump running during initial extraction (first 20% = 8s)
       if (spinProgress < 0.2) {
-        this.audio.startDrain();
+        if (!this.spinDrainActive) {
+          this.spinDrainActive = true;
+          this.audio.startDrain();
+        }
       } else {
-        this.audio.stopDrain();
+        if (this.spinDrainActive) {
+          this.spinDrainActive = false;
+          this.audio.stopDrain();
+        }
       }
 
       let currentSpinTarget = 0;
@@ -443,9 +436,6 @@ class WasherMachine {
       this.targetRPM = currentSpinTarget;
       targetSpin = Math.min(1, currentSpinTarget / 1400);
 
-      if (this.currentStage !== 'SPIN') {
-        this.audio.startSpin(1400);
-      }
       this.audio.updateSpinRPM(this.drumRPM);
 
       // Remove all remaining grime during centrifuge
@@ -458,9 +448,35 @@ class WasherMachine {
       const decelProgress = (t - 285) / 15;
       this.targetRPM = 400 * (1 - decelProgress);
       targetSpin = (1 - decelProgress) * 0.2;
-      this.audio.stopSpin();
       this.setMachineShake('gentle');
       this.setGrimeLevel(0);
+    }
+
+    // AUDIO STAGE TRANSITIONS (Only trigger once when stage changes!)
+    if (stageKey !== this.currentStage) {
+      if (stageKey === 'SENSING') {
+        this.audio.stopAll();
+      } else if (stageKey === 'FILL') {
+        this.audio.stopAll();
+        this.audio.startWaterFill();
+      } else if (stageKey === 'WASH') {
+        this.audio.stopWaterFill();
+        this.audio.startTumble(true);
+      } else if (stageKey === 'DRAIN') {
+        this.audio.stopTumble();
+        this.audio.startDrain();
+      } else if (stageKey === 'RINSE') {
+        this.audio.stopDrain();
+        this.audio.startWaterFill();
+        this.preSpinDraining = false;
+      } else if (stageKey === 'SPIN') {
+        this.audio.stopWaterFill();
+        this.audio.startSpin(1400);
+        this.spinDrainActive = false;
+      } else if (stageKey === 'FINISHING') {
+        this.audio.stopSpin();
+        this.audio.stopDrain();
+      }
     }
 
     this.currentStage = stageKey;
