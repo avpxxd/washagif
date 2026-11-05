@@ -97,6 +97,27 @@ body {
   gap: 1rem;
 }
 
+.brand-logo-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+.brand-logo-img {
+  height: 44px;
+  width: auto;
+  max-width: 220px;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 0 10px rgba(0, 242, 254, 0.4));
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.brand-logo-link:hover .brand-logo-img {
+  transform: scale(1.02);
+  filter: drop-shadow(0 0 15px rgba(0, 242, 254, 0.7));
+}
+
 .brand-title {
   font-family: 'Orbitron', sans-serif;
   font-size: 1.6rem;
@@ -845,6 +866,10 @@ body {
   }
   .app-header {
     padding: 0.85rem 1rem;
+  }
+  .brand-logo-img {
+    height: 32px;
+    max-width: 150px;
   }
   .brand-title {
     font-size: 1.15rem;
